@@ -43,9 +43,9 @@ if __name__ == "__main__":
     parser.add_argument('--word_emb_caps', default='glove.840B.300d', type=str, 
                         help='Embedding code name from torchtext.vocab.Vocab')
     parser.add_argument('--unfreeze_word_emb', dest='unfreeze_word_emb', action='store_true',
-                        default=False, help='Whether to finetune the pre-trained text embeddings')
+                        default=False, help='Whether to finetune the pre-trained text embeddings')  # 是否对词嵌入模型finetune
     parser.add_argument('--feature_timespan_in_fps', type=int, default=64,
-                        help='how many fps the input features will temporally cover')
+                        help='how many fps the input features will temporally cover')  # 
     parser.add_argument('--fps_at_extraction', type=int, default=25, 
                         help='how many fps were used at feature extraction')
     parser.add_argument('--audio_feature_timespan', type=float,
@@ -54,7 +54,7 @@ if __name__ == "__main__":
 
     ## TRAINING
     parser.add_argument('--procedure', type=str, required=True, 
-                        choices=['train_cap', 'train_prop', 'evaluate'])
+                        choices=['train_cap', 'train_prop', 'evaluate'])  # 论文中先训练cap模型，再训练prop模型
     parser.add_argument('--device_ids', type=int, nargs='+', default=[0], help='separated by a whitespace')
     parser.add_argument('--start_token', type=str, default='<s>', help='starting token')
     parser.add_argument('--end_token', type=str, default='</s>', help='ending token')
@@ -73,19 +73,20 @@ if __name__ == "__main__":
     parser.add_argument('--lr_patience', type=int, help='ReduceLROnPlateau arguments')
     parser.add_argument('--lr_reduce_factor', type=float,
                         help='ReduceLROnPlateau arguments, (use 0.2 for 1/5)')
-    parser.add_argument('--B', type=int, default=32, help='batch size per device')
+    parser.add_argument('--B', type=int, default=32, help='batch size per device')   
     parser.add_argument('--inf_B_coeff', type=int, default=2,
-                        help='The batch size on inference will be inf_B_coeff times B arg')
+                        help='The batch size on inference will be inf_B_coeff times B arg')  # 推理的Batch Size
     parser.add_argument('--epoch_num', type=int, default=100, help='number of epochs to train')
     parser.add_argument('--one_by_one_starts_at', type=int, default=1,
                         help='# of epochs to skip before starting 1-by-1 validation (saves time)')
     parser.add_argument('--early_stop_after', type=int, default=30,
-                        help='number of epochs to wait for best metric to change before stopping')
+                        help='number of epochs to wait for best metric to change before stopping')  
     parser.add_argument(
         '--smoothing', type=float, default=0.7,
         help='smoothing coeff (= 0 cross ent loss, more -- stronger smoothing) must be in [0, 1]'
     )
     parser.add_argument('--grad_clip', type=float, help='max grad norm for gradients')
+    # finetune
     parser.add_argument('--pretrained_prop_model_path', type=str, 
                         help='path to pre-trained cap model .pt')
     parser.add_argument('--finetune_prop_encoder', dest='finetune_prop_encoder',
@@ -94,6 +95,7 @@ if __name__ == "__main__":
                         help='path to pre-trained cap model .pt')
     parser.add_argument('--finetune_cap_encoder', dest='finetune_cap_encoder',
                         action='store_true', default=False)
+    
     parser.add_argument('--obj_coeff', type=float, default=1, help='objectness coeff in loss')
     parser.add_argument('--noobj_coeff', type=float, default=100, help='noobjectness coeff in loss')
     parser.add_argument('--pad_audio_feats_up_to', type=int, default=800, 
@@ -122,7 +124,7 @@ if __name__ == "__main__":
     parser.add_argument('--model', type=str, default='av_transformer',
                         choices=['transformer', 'av_transformer'], help='caption model type')
     parser.add_argument('--dout_p', type=float, default=0.1, help='dropout probability: in [0, 1]')
-    parser.add_argument('--N', type=int, default=2, help='number of layers in a model')
+    parser.add_argument('--N', type=int, default=2, help='number of layers in a model')  # 使用两层bi_modal transformer
     parser.add_argument(
         '--d_model', type=int, default=1024,
         help='the internal space in the mullti-headed attention (when input dims of Q, K, V differ)')
@@ -137,19 +139,20 @@ if __name__ == "__main__":
     parser.add_argument(
         '--d_model_caps', type=int, default=300,
         help='hidden size of the crossmodal decoder (caption tokens are mapped into this dim)'
-    )
+    )   # 词嵌入向量维度
     parser.add_argument(
         '--use_linear_embedder', dest='use_linear_embedder', action='store_true', default=False,
         help='Whether to include a dense layer between the raw features and input to the model'
-    )
-    parser.add_argument('--H', type=int, default=4, help='number of heads in multiheaded attention')
+    )   # 是否在送入网络前使用全连接层
+    parser.add_argument('--H', type=int, default=4, help='number of heads in multiheaded attention')  # 多头注意力机制的头数
     parser.add_argument(
         '--d_ff_video', type=int, help='size of the internal layer of PositionwiseFeedForward')
     parser.add_argument(
         '--d_ff_audio', type=int, help='size of the internal layer of PositionwiseFeedForward')
     parser.add_argument(
         '--d_ff_caps', type=int, help='size of the internal layer of PositionwiseFeedForward')
-    parser.add_argument('--anchors_num_video', type=int, default=128)
+    ## PROPOSAL GENERATION
+    parser.add_argument('--anchors_num_video', type=int, default=128)  
     parser.add_argument('--anchors_num_audio', type=int, default=48)
     parser.add_argument('--kernel_sizes_audio', type=int, nargs='+', 
                         default=[5, 13, 23, 35, 51, 69, 91, 121, 161, 211])
