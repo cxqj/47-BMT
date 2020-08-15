@@ -21,7 +21,7 @@ def mask(src, trg, pad_idx):  # SRC: (B,T)  TRG：(B,Seq_Len)  Pad_Idx: 1
     True,True,True,......False
     """
     if trg is not None:
-        trg_mask = (trg != pad_idx).unsqueeze(-2) & subsequent_mask(trg.size(-1)).type_as(src_mask.data)
+        trg_mask = (trg != pad_idx).unsqueeze(-2) & subsequent_mask(trg.size(-1)).type_as(src_mask.data)  # (B,Seq_Len,Seq_Len)
         return src_mask, trg_mask
     else:
         return src_mask
