@@ -168,27 +168,34 @@ class BiModalTransformer(nn.Module):
             for param in self.encoder.parameters():
                 param.requires_grad = cfg.finetune_prop_encoder
 
+    """
+    src: {rgb:(B,T_V,1024),flow:(B,T_V,1024),audio:(B,T_A,128)}
+    trg: (B,Seq_Len)
+    masks: {'V_mask':(B,1,T_V),
+            'A_mask':(B,1,T_A),
+            'C_mask':(B,Seq_Len,Seq_Len)}
+    """
     def forward(self, src: dict, trg, masks: dict):
-        V, A = src['rgb'] + src['flow'], src['audio']
-        C = trg
+        V, A = src['rgb'] + src['flow'], src['audio']    # (B,T_V,1024),(B,T_A,128)
+        C = trg  # (B,Seq_Len)
 
         # (B, Sm, Dm) <- (B, Sm, Dm), m in [a, v]; 
-        A = self.emb_A(A)
-        V = self.emb_V(V)
+        A = self.emb_A(A)  # (B,T_A,128)
+        V = self.emb_V(V)  # (B,T_V,1024)
         # (B, Sc, Dc) <- (S, Sc)
-        C = self.emb_C(C)
-        
-        A = self.pos_enc_A(A)
-        V = self.pos_enc_V(V)
-        C = self.pos_enc_C(C)
+        C = self.emb_C(C)  # (B,Seq_Len,300)
+        # 添加位置信息
+        A = self.pos_enc_A(A)  # (B,T_A,128)
+        V = self.pos_enc_V(V)  # (B,T_V,1024)
+        C = self.pos_enc_C(C)  # (B,Seq_Len,300) 
         
         # notation: M1m2m2 (B, Sm1, Dm1), M1 is the target modality, m2 is the source modality
-        Av, Va = self.encoder((A, V), masks)
+        Av, Va = self.encoder((A, V), masks)   # Av: (B,T_A,128)  Va: (B,T_V,1024)
 
         # (B, Sc, Dc)
-        C = self.decoder((C, (Av, Va)), masks)
+        C = self.decoder((C, (Av, Va)), masks) # (B,Seq_Len,300)
         
         # (B, Sc, Vc) <- (B, Sc, Dc) 
-        C = self.generator(C)
+        C = self.generator(C)  # (B,Seq_Len,300)-->(B,Seq_Len,Vocab_Size)
 
         return C
