@@ -5,7 +5,7 @@ class Generator(nn.Module):
 
     def __init__(self, d_model, voc_size):
         super(Generator, self).__init__()
-        self.linear = nn.Linear(d_model, voc_size)
+        self.linear = nn.Linear(d_model, voc_size)   # 300-->Vocab_Size
         print('Using vanilla Generator')
 
     def forward(self, x):
