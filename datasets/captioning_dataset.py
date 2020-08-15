@@ -15,6 +15,7 @@ def caption_iterator(cfg, batch_size, phase):
     def tokenize_en(txt):
         return [token.text for token in spacy_en.tokenizer(txt)]
     
+    # 创建CAPTION对象
     CAPTION = data.ReversibleField(
         tokenize='spacy', init_token=cfg.start_token, eos_token=cfg.end_token, 
         pad_token=cfg.pad_token, lower=True, batch_first=True, is_target=True
@@ -292,8 +293,8 @@ class ActivityNetCaptionsDataset(Dataset):
         self.feature_names = f'{cfg.video_feature_name}_{cfg.audio_feature_name}'
         
         if phase == 'train':
-            self.meta_path = cfg.train_meta_path
-            self.batch_size = cfg.train_batch_size
+            self.meta_path = cfg.train_meta_path    # './data/train.csv'
+            self.batch_size = cfg.train_batch_size   
         elif phase == 'val_1':
             self.meta_path = cfg.val_1_meta_path
             self.batch_size = cfg.inference_batch_size
