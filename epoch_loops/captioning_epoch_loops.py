@@ -322,3 +322,4 @@ def validation_1by1_loop(cfg, model, loader, decoder, epoch, TBoard):
             TBoard.add_scalar(f'{phase}/duration_of_1by1', (time() - start_timer) / 60, epoch)
 
         return val_metrics
+    
