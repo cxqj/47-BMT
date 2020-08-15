@@ -32,18 +32,18 @@ class EncoderLayer(nn.Module):
         
         return x
 
-
+# 双模态编码层
 class BiModalEncoderLayer(nn.Module):
-
+    # d_model_M1=128, d_model_M2=1024, d_model=1024, dout_p=0.1, H=4, d_ff_M1=512, d_ff_M2=4096
     def __init__(self, d_model_M1, d_model_M2, d_model, dout_p, H, d_ff_M1, d_ff_M2):
-        super(BiModalEncoderLayer, self).__init__()
-        self.self_att_M1 = MultiheadedAttention(d_model_M1, d_model_M1, d_model_M1, H, dout_p, d_model)
-        self.self_att_M2 = MultiheadedAttention(d_model_M2, d_model_M2, d_model_M2, H, dout_p, d_model)
-        self.bi_modal_att_M1 = MultiheadedAttention(d_model_M1, d_model_M2, d_model_M2, H, dout_p, d_model)
-        self.bi_modal_att_M2 = MultiheadedAttention(d_model_M2, d_model_M1, d_model_M1, H, dout_p, d_model)
-        self.feed_forward_M1 = PositionwiseFeedForward(d_model_M1, d_ff_M1, dout_p)
-        self.feed_forward_M2 = PositionwiseFeedForward(d_model_M2, d_ff_M2, dout_p)
-        self.res_layers_M1 = clone(ResidualConnection(d_model_M1, dout_p), 3)
+        super(BiModalEncoderLayer, self).__init__()  # 最终的输出维度和Q一样
+        self.self_att_M1 = MultiheadedAttention(d_model_M1, d_model_M1, d_model_M1, H, dout_p, d_model)  # 音频特征自注意力机制   输出维度128
+        self.self_att_M2 = MultiheadedAttention(d_model_M2, d_model_M2, d_model_M2, H, dout_p, d_model)  # 视频特征自注意力机制   输出维度1024
+        self.bi_modal_att_M1 = MultiheadedAttention(d_model_M1, d_model_M2, d_model_M2, H, dout_p, d_model)  # 音频/视频注意力机制  输出维度128
+        self.bi_modal_att_M2 = MultiheadedAttention(d_model_M2, d_model_M1, d_model_M1, H, dout_p, d_model)  # 视频/音频注意力机制  输出维度1024
+        self.feed_forward_M1 = PositionwiseFeedForward(d_model_M1, d_ff_M1, dout_p)  # feed_forward层  128-->512-->128
+        self.feed_forward_M2 = PositionwiseFeedForward(d_model_M2, d_ff_M2, dout_p)  # feed_forward层  1024-->4096-->1024
+        self.res_layers_M1 = clone(ResidualConnection(d_model_M1, dout_p), 3)   # 残差连接  共三个残差连接  (自注意力，互注意力，feed_forward)
         self.res_layers_M2 = clone(ResidualConnection(d_model_M2, dout_p), 3)
 
     def forward(self, x, masks):
@@ -106,11 +106,11 @@ class Encoder(nn.Module):
 
 
 class BiModalEncoder(nn.Module):
-
+    # d_model_A: 128  d_model_V: 1024 d_model: 1024  dout_p: 0.1 H:4  d_ff_A: 4*128  d_ff_V: 4*1024 N:2
     def __init__(self, d_model_A, d_model_V, d_model, dout_p, H, d_ff_A, d_ff_V, N):
         super(BiModalEncoder, self).__init__()
         layer_AV = BiModalEncoderLayer(d_model_A, d_model_V, d_model, dout_p, H, d_ff_A, d_ff_V)
-        self.encoder_AV = LayerStack(layer_AV, N)
+        self.encoder_AV = LayerStack(layer_AV, N)  # 两层编码层
 
     def forward(self, x, masks: dict):
         '''
