@@ -10,6 +10,7 @@ from evaluation.evaluate import ANETcaptions
 from datasets.load_features import load_features_from_npy
 from utilities.captioning_utils import HiddenPrints, get_lr
 
+# 计算性能(caption和proposal都是用这一个)
 def calculate_metrics(
     reference_paths, submission_path, tIoUs, max_prop_per_vid, verbose=True, only_proposals=False
 ):
@@ -36,6 +37,7 @@ def calculate_metrics(
     
     return metrics
 
+# 生成Caption
 def greedy_decoder(model, feature_stacks, max_len, start_idx, end_idx, pad_idx, modality):
     assert model.training is False, 'call model.eval first'
 
@@ -89,6 +91,16 @@ def save_model(cfg, epoch, model, optimizer, val_1_loss_value, val_2_loss_value,
 
 
 def make_masks(feature_stacks, captions, modality, pad_idx):
+    """
+    feature_stack:
+         rgb: (B,T_V,1024)
+         flow: (B,T_V,1024)
+         audio: (B,T_A,128)
+         
+    captions: (B,Seq_Len-1)
+    modality:audio_video 
+    pad_idx: 1
+    """
     masks = {}
 
     if modality == 'video':
@@ -116,6 +128,11 @@ def make_masks(feature_stacks, captions, modality, pad_idx):
         masks['A_mask'] = mask(feature_stacks['audio'][:, :, 0], None, pad_idx)
         masks['S_mask'] = mask(feature_stacks['subs'], None, pad_idx)
 
+    """
+    masks: {'V_mask':(B,1,T_V),
+            'A_mask':(B,1,T_A),
+            'C_mask':(B,Seq_Len,Seq_Len)}
+    """
     return masks
 
 
@@ -127,8 +144,14 @@ def training_loop(cfg, model, loader, criterion, optimizer, epoch, TBoard):
     
     for i, batch in enumerate(tqdm(loader, desc=progress_bar_name)):
         optimizer.zero_grad()
-        caption_idx = batch['caption_data'].caption
-        caption_idx, caption_idx_y = caption_idx[:, :-1], caption_idx[:, 1:]
+        caption_idx = batch['caption_data'].caption   # (B,Seq_Len)
+        # 分别获取不包含结尾单词和起始单词的caption
+        caption_idx, caption_idx_y = caption_idx[:, :-1], caption_idx[:, 1:]  # (B,Seq_Len-1),(B,Seq_Len-1)
+        """
+         masks: {'V_mask':(B,1,T_V),
+                 'A_mask':(B,1,T_A),
+                 'C_mask':(B,Seq_Len,Seq_Len)}
+        """
         masks = make_masks(batch['feature_stacks'], caption_idx, cfg.modality, loader.dataset.pad_idx)
         pred = model(batch['feature_stacks'], caption_idx, masks)
         n_tokens = (caption_idx_y != loader.dataset.pad_idx).sum()
