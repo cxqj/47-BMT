@@ -310,5 +310,14 @@ class AnetPredictions(object):
                 self.cfg.reference_paths, self.submission_path, self.cfg.tIoUs,
                 self.cfg.max_prop_per_vid, verbose=True, only_proposals=True  # 注意在评价提议生成效果的时候需要将only_proposals置为True
             )
+        """
+        metrics:
+           {0.3: {'recall','precision'},
+            0.5: {'recall','precision'},
+            0.7: {'recall','precision'},
+            0.9: {'recall','precision'},
+            'Average across tIOUs': {'recall','precision'}
+           }
+        """
         return metrics
             
