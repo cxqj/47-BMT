@@ -9,15 +9,15 @@ class LabelSmoothing(nn.Module):
         self.smoothing = smoothing  # 0.7
         self.pad_idx = pad_idx  # 1
         
-    def forward(self, pred, target):  # pred (B, S, V), target (B, S)
+    def forward(self, pred, target):  # pred (B, Seq_Len, Vocab_size), target (B, Seq_Len)
         # Note: preds are expected to be after log
         B, S, V = pred.shape
         # (B, S, V) -> (B * S, V); (B, S) -> (B * S)
-        pred = pred.contiguous().view(-1, V)
-        target = target.contiguous().view(-1)
+        pred = pred.contiguous().view(-1, V)  # (B * Seq_Len, Vocab_size)
+        target = target.contiguous().view(-1) # (B * Seq_Len)
         
         # prior (uniform)
-        dist = self.smoothing * torch.ones_like(pred) / (V - 2)
+        dist = self.smoothing * torch.ones_like(pred) / (V - 2)  # (B * Seq_Len, Vocab_size)
         # add smoothed ground-truth to prior (args: dim, index, src (value))
         dist.scatter_(1, target.unsqueeze(-1).long(), 1-self.smoothing)
         # make the padding token to have zero probability
