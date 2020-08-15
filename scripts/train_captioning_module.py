@@ -123,7 +123,7 @@ def train_cap(cfg):
                 # saving the model if it is better than the best so far
                 if best_metric < metrics_avg['METEOR']:
                     best_metric = metrics_avg['METEOR']
-                    
+                    # 保存模型
                     save_model(cfg, epoch, model, optimizer, val_1_loss, val_2_loss,
                                val_1_metrics, val_2_metrics, train_dataset.trg_voc_size)
                     # reset the early stopping criterion
