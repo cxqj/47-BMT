@@ -7,16 +7,16 @@ from utilities.proposal_utils import add_dict_to_another_dict, select_topk_predi
 
 from model.blocks import Transpose, FeatureEmbedder, Identity, PositionalEncoder
 
-
+# 每种Kernel_Size对应一个Head
 class ProposalGenerationHead(nn.Module):
 
     def __init__(self, d_model_list, kernel_size, dout_p, layer_norm=False):
         super(ProposalGenerationHead, self).__init__()
         assert kernel_size % 2 == 1, 'It is more convenient to use odd kernel_sizes for padding'
         conv_layers = []
-        in_dims = d_model_list[:-1]
-        out_dims = d_model_list[1:]
-        N_layers = len(d_model_list) - 1
+        in_dims = d_model_list[:-1]   # Audio: [128,512,512]    Video: [1024,512,512]
+        out_dims = d_model_list[1:]   # Audio: [512,512,3*48]   Video: [512,512,3*128]
+        N_layers = len(d_model_list) - 1  # 3
 
         for n, (in_d, out_d) in enumerate(zip(in_dims, out_dims)):
             if layer_norm:
@@ -25,9 +25,9 @@ class ProposalGenerationHead(nn.Module):
                 conv_layers.append(Transpose())
 
             if n == 0:
-                conv_layers.append(nn.Conv1d(in_d, out_d, kernel_size, padding=kernel_size//2))
+                conv_layers.append(nn.Conv1d(in_d, out_d, kernel_size, padding=kernel_size//2))   # 第一层使用不同大小的Kernel_Size,并Padding特征到输入尺寸
             else:
-                conv_layers.append(nn.Conv1d(in_d, out_d, kernel_size=1))
+                conv_layers.append(nn.Conv1d(in_d, out_d, kernel_size=1))  # 第二、三层使用Kernel_Size=1
 
             if n < (N_layers - 1):
                 if dout_p > 0:
@@ -228,6 +228,7 @@ class MultimodalProposalGenerator(nn.Module):
         else:
             self.emb_V = Identity()
             self.emb_A = Identity()
+        # 添加位置编码，在提议生成时只用到Video和Audio信息
         self.pos_enc_V = PositionalEncoder(cfg.d_model_video, cfg.dout_p)
         self.pos_enc_A = PositionalEncoder(cfg.d_model_audio, cfg.dout_p)
 
@@ -257,8 +258,8 @@ class MultimodalProposalGenerator(nn.Module):
                 if p.dim() > 1:
                     nn.init.xavier_uniform_(p)
 
-        dims_A = [cfg.d_model_audio, *cfg.conv_layers_audio, self.num_logits*cfg.anchors_num_audio]
-        dims_V = [cfg.d_model_video, *cfg.conv_layers_video, self.num_logits*cfg.anchors_num_video]
+        dims_A = [cfg.d_model_audio, *cfg.conv_layers_audio, self.num_logits*cfg.anchors_num_audio]  # [128,512,512,3*48]
+        dims_V = [cfg.d_model_video, *cfg.conv_layers_video, self.num_logits*cfg.anchors_num_video]  # [1024,512,512,3*128]
         self.detection_layers_A = torch.nn.ModuleList([
             ProposalGenerationHead(dims_A, k, cfg.dout_p, cfg.layer_norm) for k in cfg.kernel_sizes['audio']
         ])
@@ -268,58 +269,59 @@ class MultimodalProposalGenerator(nn.Module):
         
         self.bce_loss = nn.BCELoss()
         self.mse_loss = nn.MSELoss()
-
-    def forward_modality(self, x, targets, detection, stride, anchors_list):
-        anchors_num = len(anchors_list)
+    
+    def forward_modality(self, x, targets, detection, stride, anchors_list):  # x:(B,800,128)/(B,300,1024), targets:(N,4), stride: 0.96/, anchors_list：(48,)/(128,)
+        anchors_num = len(anchors_list)  # A:48  V:128
         # in case targets is None
         loss = 0
         losses = {}
 
-        x = detection(x)
+        x = detection(x)  # A: (B,800,3*48)
 
-        B, S, D = x.shape
-        x = x.view(B, S, anchors_num, self.num_logits)
+        B, S, D = x.shape # A: B,800,144   
+        x = x.view(B, S, anchors_num, self.num_logits)  # A:(B,800,48,3)
 
-        x = x.permute(0, 2, 1, 3).contiguous()
-        grid_cell = torch.arange(S).view(1, 1, S).float().to(self.cfg.device)
+        x = x.permute(0, 2, 1, 3).contiguous()    # A:(B,48,800,3) 
+        grid_cell = torch.arange(S).view(1, 1, S).float().to(self.cfg.device)  # A：(1,1,800)
         # After dividing anchors by the stride, they represent the size size of
         # how many grid celts they are overlapping: 1.2 = 1 and 20% of a grid cell.
         # After multiplying them by the stride, the pixel values are going to be
-        # obtained.
-        anchors_list = [[anchor / stride] for anchor in anchors_list]
-        anchors_tensor = torch.tensor(anchors_list, device=self.cfg.device)
+        # obtained.  为啥除以stride,转换为特征帧，每一帧对应原视频0.96s??
+        anchors_list = [[anchor / stride] for anchor in anchors_list]  # A: (48,1)
+        anchors_tensor = torch.tensor(anchors_list, device=self.cfg.device)  # A: (48,1) 
         # (A, 2) -> (1, A, 1) for broadcasting
-        prior_length = anchors_tensor.view(1, anchors_num, 1)
+        prior_length = anchors_tensor.view(1, anchors_num, 1)  # A: (1,48,1) 
 
         # prediction values for the *loss* calculation (training)
-        sigma_c = torch.sigmoid(x[:, :, :, 0])  # center
-        l = x[:, :, :, 1]  # length
-        sigma_o = torch.sigmoid(x[:, :, :, 2])  # objectness
+        sigma_c = torch.sigmoid(x[:, :, :, 0])  # center  A:(B,48,800) 
+        l = x[:, :, :, 1]                       # length  A:(B,48,800)
+        sigma_o = torch.sigmoid(x[:, :, :, 2])  # objectness  A:(B,48,800)
 
         # prediction values that are going to be used for the original image
         # we need to detach them from the graph as we don't need to backproparate
         # on them
-        predictions = x.clone().detach()
+        predictions = x.clone().detach()   # A:(B,48,800,3) 
         # broadcasting (B, A, S) + (1, 1, S)
         # For now, we are not going to multiply them by stride since
         # we need them in make_targets
-        predictions[:, :, :, 0] = sigma_c + grid_cell
+        predictions[:, :, :, 0] = sigma_c + grid_cell  # A: (B,48,800) + (1,1,800)-->(B,48,800)
         # broadcasting (1, A, 1) * (B, A, S)
-        predictions[:, :, :, 1] = prior_length * torch.exp(l)
-        predictions[:, :, :, 2] = sigma_o
+        predictions[:, :, :, 1] = prior_length * torch.exp(l) # A: (1,48,1)*(1,48,800)-->(B,48,800)
+        predictions[:, :, :, 2] = sigma_o     # A: (B,48,800)
 
         if targets is not None:
+            #  obj_mask: (B,48,800) noobj_mask: (B,48,800), gt_x: (B,48,800), gt_w: (B,48,800), gt_obj: (B,48,800)
             obj_mask, noobj_mask, gt_x, gt_w, gt_obj = make_targets(predictions, targets, 
                                                                     anchors_tensor, stride)
             ## Loss
-            # Localization
+            # Localization  定位时只关注前景
             loss_x = self.mse_loss(sigma_c[obj_mask], gt_x[obj_mask])
             loss_w = self.mse_loss(l[obj_mask], gt_w[obj_mask])
             loss_loc = loss_x + loss_w
-            # Confidence
+            # Confidence    计算置信度时关注前景和背景
             loss_obj = self.bce_loss(sigma_o[obj_mask], gt_obj[obj_mask])
             loss_noobj = self.bce_loss(sigma_o[noobj_mask], gt_obj[noobj_mask])
-            loss_conf = self.cfg.obj_coeff * loss_obj + self.cfg.noobj_coeff * loss_noobj
+            loss_conf = self.cfg.obj_coeff * loss_obj + self.cfg.noobj_coeff * loss_noobj   # obj_coeff = 1 noobj_coeff = 100
             # Total loss
             loss = loss_loc + loss_conf
 
@@ -331,13 +333,13 @@ class MultimodalProposalGenerator(nn.Module):
             }
 
         # for NMS: (B, A, S, 3) -> (B, A*S, 3)
-        predictions = predictions.view(B, S*anchors_num, self.num_logits)
-        predictions[:, :, :2] *= stride
+        predictions = predictions.view(B, S*anchors_num, self.num_logits)  
+        predictions[:, :, :2] *= stride  # 转成秒的形式？？  A： (B,48*800,3)
 
         return predictions, loss, losses
 
     def forward(self, x, targets, masks):
-        V, A = x['rgb'] + x['flow'], x['audio']
+        V, A = x['rgb'] + x['flow'], x['audio']  # V: (B,300,1024) A: (B,800,128)
 
         # (B, Sm, Dm) < - (B, Sm, Dm), m in [a, v]
         A = self.emb_A(A)
@@ -345,12 +347,12 @@ class MultimodalProposalGenerator(nn.Module):
         A = self.pos_enc_A(A)
         V = self.pos_enc_V(V)
         # notation: M1m2m2 (B, Sm1, Dm1), M1 is the target modality, m2 is the source modality
-        Av, Va = self.encoder((A, V), masks)
+        Av, Va = self.encoder((A, V), masks)    # Av: (B,800,128)  Va: (B,300,1024) 
 
-        all_predictions_A = []
+        all_predictions_A = []  # 保存每一层的结果
         all_predictions_V = []
         # total_loss should have backward
-        sum_losses_dict_A = {}
+        sum_losses_dict_A = {}  # 累加每一层的Loss
         sum_losses_dict_V = {}
         total_loss_A = 0
         total_loss_V = 0
@@ -358,7 +360,7 @@ class MultimodalProposalGenerator(nn.Module):
         for layer in self.detection_layers_A:
             props_A, loss_A, losses_A = self.forward_modality(
                 Av, targets, layer, self.cfg.strides['audio'], self.anchors['audio']
-            )
+            )  # prop_A: (B,48*800,3)
             total_loss_A += loss_A
             all_predictions_A.append(props_A)
             sum_losses_dict_A = add_dict_to_another_dict(losses_A, sum_losses_dict_A)
@@ -371,13 +373,13 @@ class MultimodalProposalGenerator(nn.Module):
             all_predictions_V.append(props_V)
             sum_losses_dict_V = add_dict_to_another_dict(losses_V, sum_losses_dict_V)
 
-        all_predictions_A = torch.cat(all_predictions_A, dim=1)
-        all_predictions_V = torch.cat(all_predictions_V, dim=1)
+        all_predictions_A = torch.cat(all_predictions_A, dim=1)  # (B,384000,3)
+        all_predictions_V = torch.cat(all_predictions_V, dim=1)  # (B,384000,3)
 
         total_loss = total_loss_A + total_loss_V
 
         # combine predictions
-        all_predictions = torch.cat([all_predictions_A, all_predictions_V], dim=1)
+        all_predictions = torch.cat([all_predictions_A, all_predictions_V], dim=1)  # (B,768000,3)
         # if you like the predictions to be half from audio and half from the video modalities
         # all_predictions = torch.cat([
         #     select_topk_predictions(all_predictions_A, k=self.cfg.max_prop_per_vid // 2),
@@ -385,38 +387,45 @@ class MultimodalProposalGenerator(nn.Module):
         # ], dim=1)
 
         return all_predictions, total_loss, sum_losses_dict_A, sum_losses_dict_V
-
-def make_targets(predictions, targets, anchors, stride):
+"""
+predictions: A: (B,48,800,3)
+targets: (N,4)
+anchors: A: (48,)
+stride: A: 0.96
+"""
+def make_targets(predictions, targets, anchors, stride):   # 获取gt_traget  来计算loss
     '''
         The implementation relies on YOLOv3 for object detection
             - https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/master/models.py
             - https://github.com/v-iashin/PersonalProjects/blob/master/detector/darknet.py
     '''
-    B, num_anchs, G, num_feats = predictions.size()
+    B, num_anchs, G, num_feats = predictions.size()  # A: B,48,800,3
 
     # classes = 1
     EPS = 1e-16
 
     # create the placeholders
-    noobj_mask = torch.ones(B, num_anchs, G, device=predictions.device).bool()
-    obj_mask = torch.zeros_like(noobj_mask).bool()
-    target_x = torch.zeros_like(noobj_mask).float()
-    target_w = torch.zeros_like(noobj_mask).float()
+    noobj_mask = torch.ones(B, num_anchs, G, device=predictions.device).bool()  # A: (B,48,800)             记录背景anchor的位置
+    obj_mask = torch.zeros_like(noobj_mask).bool()   # A: (B,48,800)   48表示anchor长度索引，800表示中心索引   记录前景anchor的位置
+    target_x = torch.zeros_like(noobj_mask).float()  # A: (B,48,800)
+    target_w = torch.zeros_like(noobj_mask).float()  # A: (B,48,800)
 
     # image index within the batch, the g.t. label of an object on the image
-    vid_idx = targets[:, 0].long()
+    vid_idx = targets[:, 0].long()  # batch索引  (N,)
     # ground truth center coordinates and bbox dimensions
     # since the target bbox coordinates are in seconds, we transoform
     # them into grid-axis
     # So, the gt_x will represent the position of the center in grid cells
     # Similarly, the size sizes are also scaled to grid size
-    gt_x = targets[:, 1] / stride
-    gt_w = targets[:, 2] / stride
+    gt_x = targets[:, 1] / stride  # 转为帧形式  (N,)
+    gt_w = targets[:, 2] / stride  # 转为帧形式  (N,)
+    #获取预设anchor长度与gt长度匹配索引
     # ious between scaled anchors (anchors_from_cfg / stride) and gt bboxes
-    gt_anchor_ious = tiou_vectorized(anchors, gt_w.unsqueeze(-1), without_center_coords=True)
+    gt_anchor_ious = tiou_vectorized(anchors, gt_w.unsqueeze(-1), without_center_coords=True)  # 计算预设的anchor长度和gt_anchor长度的IOU   (48,N)
     # selecting the best anchors for the g.t. bboxes
-    best_ious, best_anchors = gt_anchor_ious.max(dim=0)
+    best_ious, best_anchors = gt_anchor_ious.max(dim=0)  # 每一个gt_anchor和哪一个预设anchor最为匹配以及匹配度
 
+     #获取gt事件长度匹配索引
     # remove a decimal part -> gi point to the grid position to which an object will correspond 
     # for example: 9.89 -> 9
     gt_cell = gt_x.long()
