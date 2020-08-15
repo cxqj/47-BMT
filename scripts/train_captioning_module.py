@@ -27,6 +27,7 @@ def train_cap(cfg):
 
     exp_name = cfg.curr_time[2:]
 
+    # 构建数据加载器
     train_dataset = ActivityNetCaptionsDataset(cfg, 'train', get_full_feat=False)
     val_1_dataset = ActivityNetCaptionsDataset(cfg, 'val_1', get_full_feat=False)
     val_2_dataset = ActivityNetCaptionsDataset(cfg, 'val_2', get_full_feat=False)
@@ -36,11 +37,13 @@ def train_cap(cfg):
     val_1_loader = DataLoader(val_1_dataset, collate_fn=val_1_dataset.dont_collate)
     val_2_loader = DataLoader(val_2_dataset, collate_fn=val_2_dataset.dont_collate)
 
+    # 构建双模态Transformer
     if cfg.modality == 'audio_video':
         model = BiModalTransformer(cfg, train_dataset)
     elif cfg.modality in ['video', 'audio']:
         model = Transformer(train_dataset, cfg)
 
+   # Cpation模型
     criterion = LabelSmoothing(cfg.smoothing, train_dataset.pad_idx)
     
     if cfg.optimizer == 'adam':
@@ -73,13 +76,13 @@ def train_cap(cfg):
     # "early stopping" thing
     num_epoch_best_metric_unchanged = 0
 
-    for epoch in range(cfg.epoch_num):
+    for epoch in range(cfg.epoch_num):  # epoch_num:100
         print(f'The best metrict was unchanged for {num_epoch_best_metric_unchanged} epochs.')
-        print(f'Expected early stop @ {epoch+cfg.early_stop_after-num_epoch_best_metric_unchanged}')
+        print(f'Expected early stop @ {epoch+cfg.early_stop_after-num_epoch_best_metric_unchanged}')  # 30 如果30轮后效果没有增强，则早停
         print(f'Started @ {cfg.curr_time}; Current timer: {timer(cfg.curr_time)}')
         
         # stop training if metric hasn't been changed for cfg.early_stop_after epochs
-        if num_epoch_best_metric_unchanged == cfg.early_stop_after:
+        if num_epoch_best_metric_unchanged == cfg.early_stop_after:   # 30
             break
         
         # train
