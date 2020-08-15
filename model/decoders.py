@@ -35,22 +35,22 @@ class DecoderLayer(nn.Module):
 
 
 class BiModalDecoderLayer(nn.Module):
-
+    # d_model_A=128, d_model_V=1024, d_model_C=300, d_model=1024, dout_p=0.1, H=4, d_ff_C=300
     def __init__(self, d_model_A, d_model_V, d_model_C, d_model, dout_p, H, d_ff_C):
-        super(BiModalDecoderLayer, self).__init__()
+        super(BiModalDecoderLayer, self).__init__()  # # 最终的输出维度和Q一样
         # self attention
-        self.res_layer_self_att = ResidualConnection(d_model_C, dout_p)
-        self.self_att = MultiheadedAttention(d_model_C, d_model_C, d_model_C, H, dout_p, d_model)
+        self.res_layer_self_att = ResidualConnection(d_model_C, dout_p)  # 残差连接用于caption自注意力机制后
+        self.self_att = MultiheadedAttention(d_model_C, d_model_C, d_model_C, H, dout_p, d_model)  # Caption自注意力机制   输出维度300
         # encoder attention
-        self.res_layer_enc_att_A = ResidualConnection(d_model_C, dout_p)
+        self.res_layer_enc_att_A = ResidualConnection(d_model_C, dout_p)  
         self.res_layer_enc_att_V = ResidualConnection(d_model_C, dout_p)
-        self.enc_att_A = MultiheadedAttention(d_model_C, d_model_A, d_model_A, H, dout_p, d_model)
-        self.enc_att_V = MultiheadedAttention(d_model_C, d_model_V, d_model_V, H, dout_p, d_model)
+        self.enc_att_A = MultiheadedAttention(d_model_C, d_model_A, d_model_A, H, dout_p, d_model)  # Caption/音频注意力机制  输出维度300
+        self.enc_att_V = MultiheadedAttention(d_model_C, d_model_V, d_model_V, H, dout_p, d_model)  # Caption/视频注意力机制  输出维度300
         # bridge
-        self.bridge = BridgeConnection(2*d_model_C, d_model_C, dout_p)
+        self.bridge = BridgeConnection(2*d_model_C, d_model_C, dout_p)   #  2*300-->300
         # feed forward residual
         self.res_layer_ff = ResidualConnection(d_model_C, dout_p)
-        self.feed_forward = PositionwiseFeedForward(d_model_C, d_ff_C, dout_p)
+        self.feed_forward = PositionwiseFeedForward(d_model_C, d_ff_C, dout_p)   # FeedForward层  300-->1200-->300
 
     def forward(self, x, masks):
         '''
@@ -112,7 +112,7 @@ class Decoder(nn.Module):
 
 
 class BiModelDecoder(nn.Module):
-
+    # d_model_A=128, d_model_V=1024, d_model_C=300, d_model=1024, dout_p=0.1, H=4, d_ff_C=1200, N=2
     def __init__(self, d_model_A, d_model_V, d_model_C, d_model, dout_p, H, d_ff_C, N):
         super(BiModelDecoder, self).__init__()
         layer = BiModalDecoderLayer(
