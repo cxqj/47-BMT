@@ -9,7 +9,7 @@ from sklearn.cluster import KMeans
 
 
 def tiou_vectorized(segments1, segments2, without_center_coords=False, center_length=True):
-
+    # segments1: (48,1)  seqments2: (N,1)  
     def center_length_2_start_end(segments):
         '''there is get_corner_coords(predictions) and has a bit diffrenrent logic. both are kept'''
         start = segments[:, 0] - segments[:, 1] / 2
@@ -21,40 +21,40 @@ def tiou_vectorized(segments1, segments2, without_center_coords=False, center_le
         segments1 = torch.cat([torch.zeros_like(segments1), segments1], dim=1)
         segments2 = torch.cat([torch.zeros_like(segments2), segments2], dim=1)
 
-    M, D = segments1.shape
-    N, D = segments2.shape
+    M, D = segments1.shape  # 48,2
+    N, D = segments2.shape  # N,2
 
     # TODO: replace with get_corner_coords from localization_utils
     if center_length:
-        start1, end1 = center_length_2_start_end(segments1)
-        start2, end2 = center_length_2_start_end(segments2)
+        start1, end1 = center_length_2_start_end(segments1)  # (48),(48)
+        start2, end2 = center_length_2_start_end(segments2)  # (N),(N)
     else:
         start1, end1 = segments1[:, 0], segments1[:, 1]
         start2, end2 = segments2[:, 0], segments2[:, 1]
 
     # broadcasting
-    start1 = start1.view(M, 1)
-    end1 = end1.view(M, 1)
-    start2 = start2.view(1, N)
-    end2 = end2.view(1, N)
+    start1 = start1.view(M, 1)  # (48,1)
+    end1 = end1.view(M, 1)      # (48,1)
+    start2 = start2.view(1, N)  # (1,N)
+    end2 = end2.view(1, N)      # (1,N)
 
     # calculate segments for intersection
-    intersection_start = torch.max(start1, start2)
-    intersection_end = torch.min(end1, end2)
+    intersection_start = torch.max(start1, start2)  # (48,N)
+    intersection_end = torch.min(end1, end2)        # (48,N)
 
     # we make sure that the area is 0 if size of a side is negative
     # which means that intersection_start > intersection_end which is not feasible
     # Note: adding one because the coordinates starts at 0 and let's
-    intersection = torch.clamp(intersection_end - intersection_start, min=0.0)
+    intersection = torch.clamp(intersection_end - intersection_start, min=0.0)  # (48,N)
 
     # finally we calculate union for each pair of segments
-    union1 = (end1 - start1)
-    union2 = (end2 - start2)
-    union = union1 + union2 - intersection
-    union = torch.min(torch.max(end1, end2) - torch.min(start1, start2), union)
+    union1 = (end1 - start1)  # (48,1)
+    union2 = (end2 - start2)  # (1,N)
+    union = union1 + union2 - intersection  # (48,N)
+    union = torch.min(torch.max(end1, end2) - torch.min(start1, start2), union) # (48,N)
 
     tious = intersection / (union + 1e-8)
-    return tious
+    return tious  # (48,N)
 
 
 def read_segments_from_json(train_json_path):
