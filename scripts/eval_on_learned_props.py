@@ -11,14 +11,15 @@ from datasets.captioning_dataset import ActivityNetCaptionsDataset
 from epoch_loops.captioning_epoch_loops import greedy_decoder, validation_1by1_loop
 from model.captioning_module import BiModalTransformer, Transformer
 
-def convert_props_in_json_to_csv(prop_pred_path, val_1_json_path, avail_mp4_path):
+# 将json文件转为csv文件
+def convert_props_in_json_to_csv(prop_pred_path, val_1_json_path, avail_mp4_path):   # Val_1_json_path: './data_mini/val_1_no_missings.json'
     '''
     To convert the produced proposals
     val_json only used for the information about the original duration.
     Note: val_1_json_path is val_1 and can be val_2 but val_1 is ~ 30 videos longer.
     '''
-    assert 'val_1' in val_1_json_path, f'Is it the val_1 json: {val_1_json_path}'
-    pred_csv_path = prop_pred_path.replace('.json', '.csv')
+    assert 'val_1' in val_1_json_path, f'Is it the val_1 json: {val_1_json_path}'  # 只用了Val_1,因为Val_1视频更全
+    pred_csv_path = prop_pred_path.replace('.json', '.csv')  # csv文件的路径
 
     if os.path.exists(pred_csv_path):
         print(f'File {pred_csv_path} already exists. I will use it.')
@@ -28,6 +29,7 @@ def convert_props_in_json_to_csv(prop_pred_path, val_1_json_path, avail_mp4_path
     # {'details': ..., 'version': ..., 'results': {'id': [{'sentence': str, 'timestamp': [s, e]}]}}
     pred_json = json.load(open(prop_pred_path))['results']
 
+    # 获取视频对应的时长 {视频名：时长}
     vid2duration = {video: v['duration'] for video, v in json.load(open(val_1_json_path)).items()}
 
     video_ids = []
@@ -36,7 +38,7 @@ def convert_props_in_json_to_csv(prop_pred_path, val_1_json_path, avail_mp4_path
     durations = []
 
     with open(avail_mp4_path) as in_f:
-        avail_vid_ids = {fname.replace('.mp4', '').replace('\n', '') for fname in in_f.readlines()}
+        avail_vid_ids = {fname.replace('.mp4', '').replace('\n', '') for fname in in_f.readlines()}  # 可获取的视频名称
 
     for i, (video_id, props_info_list) in enumerate(tqdm(pred_json.items(), desc='Preds to .csv')):
         
@@ -129,6 +131,15 @@ def eval_on_learned_props(args):
         cfg, model, val_pred_prop_loader, greedy_decoder, cap_model_cpt['epoch'], TBoard
     )
 
+    """
+    val_metrics_pred_prop:
+        {0.3: {'Bleu_1','Bleu_2','Bleu_3','Bleu_4','Meteor','ROUGE_L','CIDER','Recall','precision'},
+         0.5: {'Bleu_1','Bleu_2','Bleu_3','Bleu_4','Meteor','ROUGE_L','CIDER','Recall','precision'},
+         0.7: {'Bleu_1','Bleu_2','Bleu_3','Bleu_4','Meteor','ROUGE_L','CIDER','Recall','precision'},
+         0.9: {'Bleu_1','Bleu_2','Bleu_3','Bleu_4','Meteor','ROUGE_L','CIDER','Recall','precision'},
+         Averarge_across_tIOUs: {'Bleu_1','Bleu_2','Bleu_3','Bleu_4','Meteor','ROUGE_L','CIDER','Recall','precision'},
+        }
+    """
     print(val_metrics_pred_prop)
     
     # If you missed the scores after printing you may find it in the args.pretrained_cap_model_path
