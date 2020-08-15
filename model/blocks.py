@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-
+# copy多个层
 class LayerStack(nn.Module):
 
     def __init__(self, layer, N):
@@ -29,7 +29,7 @@ class Identity(nn.Module):
     def forward(self, x):
         return x
 
-
+# 词嵌入
 class VocabularyEmbedder(nn.Module):
 
     def __init__(self, voc_size, emb_dim):
@@ -80,7 +80,7 @@ class FeatureEmbedder(nn.Module):
         # (B, S, d_model_m)
         return x
 
-
+# 编码位置信息
 class PositionalEncoder(nn.Module):
 
     def __init__(self, d_model, dout_p, seq_len=3660):
@@ -119,7 +119,7 @@ class Transpose(nn.Module):
     def forward(self, x):
         return x.permute(0, 2, 1)
 
-
+# 残差连接
 class ResidualConnection(nn.Module):
 
     def __init__(self, size, dout_p):
@@ -152,7 +152,7 @@ class BridgeConnection(nn.Module):
         x = self.dropout(x)
         return self.activation(x)
 
-
+# FeedForward
 class PositionwiseFeedForward(nn.Module):
 
     def __init__(self, d_model, d_ff, dout_p):
