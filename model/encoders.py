@@ -54,8 +54,9 @@ class BiModalEncoderLayer(nn.Module):
         Output:
             M1m2 (B, Sm1, Dm1), M2m1 (B, Sm2, Dm2),
         '''
-        M1, M2 = x
-        M1_mask, M2_mask = masks
+        # M1是音频特征，M2是视频特征
+        M1, M2 = x   # M1: (B,T_A,128) M2: (B,T_V,1024)
+        M1_mask, M2_mask = masks  # M1_mask： (B,1,T_A) M2_mask: (B,1,T_V)
 
         # sublayer should be a function which inputs x and outputs transformation
         # thus, lambda is used instead of just `self.self_att(x, x, x)` which outputs
@@ -69,22 +70,23 @@ class BiModalEncoderLayer(nn.Module):
 
         # 1. Self-Attention
         # both (B, Sm*, Dm*)
-        M1 = self.res_layers_M1[0](M1, sublayer_self_att_M1)
-        M2 = self.res_layers_M2[0](M2, sublayer_self_att_M2)
+        # 调用的是上面的函数
+        M1 = self.res_layers_M1[0](M1, sublayer_self_att_M1)  # 音频特征自注意力  输出：(B,T_A,128)
+        M2 = self.res_layers_M2[0](M2, sublayer_self_att_M2)  # 视频特征自注意力  输出：(B,T_V,1024)
 
         # 2. Multimodal Attention (var names: M* is the target modality; m* is the source modality)
         # (B, Sm1, Dm1)
-        M1m2 = self.res_layers_M1[1](M1, sublayer_att_M1)
+        M1m2 = self.res_layers_M1[1](M1, sublayer_att_M1)    # 音频/视频特征注意力  输出：(B,T_A,128)
         # (B, Sm2, Dm2)
-        M2m1 = self.res_layers_M2[1](M2, sublayer_att_M2)
+        M2m1 = self.res_layers_M2[1](M2, sublayer_att_M2)    # 视频/音频特征注意力  输出：(B,T_V,1024)
 
         # 3. Feed-forward (var names: M* is the target modality; m* is the source modality)
         # (B, Sm1, Dm1)
-        M1m2 = self.res_layers_M1[2](M1m2, sublayer_ff_M1)
+        M1m2 = self.res_layers_M1[2](M1m2, sublayer_ff_M1)  # (B,T_A,128)-->(B,T_A,128*4)-->(B,T_A,128)
         # (B, Sm2, Dm2)
-        M2m1 = self.res_layers_M2[2](M2m1, sublayer_ff_M2)
+        M2m1 = self.res_layers_M2[2](M2m1, sublayer_ff_M2)  # (B,T_V,1024)-->(B,T_V,1024*4)-->(B,T_V,1024)
 
-        return M1m2, M2m1
+        return M1m2, M2m1  # (B,T_A,128), (B,T_V,1024)
     
 
 class Encoder(nn.Module):
@@ -120,9 +122,9 @@ class BiModalEncoder(nn.Module):
         Output:
             (Av, Va): (B, Sm1, Dm1)
         '''
-        A, V = x
-
+        A, V = x   # A：(B,T_A,128) V: (B,T_V,1024)
+ 
         # M1m2 (B, Sm1, D), M2m1 (B, Sm2, D) <-
-        Av, Va = self.encoder_AV((A, V), (masks['A_mask'], masks['V_mask']))
+        Av, Va = self.encoder_AV((A, V), (masks['A_mask'], masks['V_mask']))  # Av:(B,T_A,128), Va:(B,T_V,1024)  
 
-        return (Av, Va)
+        return (Av, Va)  # Av:(B,T_A,128), Va:(B,T_V,1024)  
