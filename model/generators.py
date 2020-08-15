@@ -16,4 +16,4 @@ class Generator(nn.Module):
             (B, seq_len, voc_size)
         '''
         x = self.linear(x)
-        return F.log_softmax(x, dim=-1)
+        return F.log_softmax(x, dim=-1)  # 注意最后需要加入softmax获取分类概率
