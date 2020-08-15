@@ -45,14 +45,14 @@ class VocabularyEmbedder(nn.Module):
 
         return x  # (B, seq_len, d_model)
 
-    def init_word_embeddings(self, weight_matrix, emb_weights_req_grad=True):
+    def init_word_embeddings(self, weight_matrix, emb_weights_req_grad=True):   # weight_matrix：(单词数，300)， emb_weights_req_grad=False(不需要训练词嵌入模型了，直接用Glove模型初始化)
         if weight_matrix is None:
             print('Training word embeddings from scratch')
         else:
             pretrained_voc_size, pretrained_emb_dim = weight_matrix.shape
             if self.emb_dim == pretrained_emb_dim:
                 self.embedder = self.embedder.from_pretrained(weight_matrix)
-                self.embedder.weight.requires_grad = emb_weights_req_grad
+                self.embedder.weight.requires_grad = emb_weights_req_grad   # False
                 print('Glove emb of the same size as d_model_caps')
             else:
                 self.embedder = nn.Sequential(
@@ -135,7 +135,7 @@ class ResidualConnection(nn.Module):
 
         return x + res
 
-
+# 用于解码层，将特征维度编码到所需维度
 class BridgeConnection(nn.Module):
 
     def __init__(self, in_dim, out_dim, dout_p):
