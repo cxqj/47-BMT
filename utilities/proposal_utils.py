@@ -80,16 +80,16 @@ def read_segments_from_json(train_json_path):
     # return scaled_segment_lengths
     return segment_lengths
 
-
+# 使用K-means算法获取预设提议长度
 def calc_anchors_using_kmeans(train_json_path, k):
     # loading data
     # scaled_segment_lengths = read_segments_from_json(train_json_path)
-    segment_lengths = read_segments_from_json(train_json_path)
+    segment_lengths = read_segments_from_json(train_json_path)  # (提议数, 1)
     # kmeans
     kmeans = KMeans(n_clusters=k, random_state=13, init='random', n_init=1)
     # kmeans.fit(scaled_segment_lengths.numpy())
     kmeans.fit(segment_lengths.numpy())
-    cluster_centers = kmeans.cluster_centers_.reshape(k)
+    cluster_centers = kmeans.cluster_centers_.reshape(k)  # (K,)
     cluster_centers.sort()
     cluster_centers = list(cluster_centers)
     return cluster_centers
