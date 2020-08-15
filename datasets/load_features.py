@@ -35,8 +35,8 @@ def crop_a_segment(feature, start, end, duration):
 
 
 def pad_segment(feature, max_feature_len, pad_idx):
-    S, D = feature.shape
-    assert S <= max_feature_len
+    S, D = feature.shape  # Audio: (T_A,128)  Video: (T_V,1024)
+    assert S <= max_feature_len  # 音频最大长度800， 视频最大长度300
     # pad
     l, r, t, b = 0, 0, 0, max_feature_len - S
     feature = F.pad(feature, [l, r, t, b], value=pad_idx)
@@ -50,18 +50,19 @@ def load_features_from_npy(cfg, feature_names_list, video_id, start, end, durati
     assert len(feature_names_list) > 0
     assert set(feature_names_list).issubset(supported_feature_names)
 
+    # 训练提议生成模型时需要整个视频特征
     stacks = {}
     if get_full_feat:
         stacks['orig_feat_length'] = {}
 
     if 'vggish_features' in feature_names_list:
         try:
-            stack_vggish = np.load(os.path.join(cfg.audio_features_path, f'{video_id}.npy'))
+            stack_vggish = np.load(os.path.join(cfg.audio_features_path, f'{video_id}.npy'))   # (T_A,128)
             stack_vggish = torch.from_numpy(stack_vggish).float()
 
             if get_full_feat:
-                stacks['orig_feat_length']['audio'] = stack_vggish.shape[0]
-                stack_vggish = pad_segment(stack_vggish, cfg.pad_feats_up_to['audio'], pad_idx)
+                stacks['orig_feat_length']['audio'] = stack_vggish.shape[0]    # T_A
+                stack_vggish = pad_segment(stack_vggish, cfg.pad_feats_up_to['audio'], pad_idx)  # (800,128)
             else:
                 stack_vggish = crop_a_segment(stack_vggish, start, end, duration)
         except FileNotFoundError:
@@ -70,17 +71,17 @@ def load_features_from_npy(cfg, feature_names_list, video_id, start, end, durati
     # not elif
     if 'i3d_features' in feature_names_list:
         try:
-            stack_rgb = np.load(os.path.join(cfg.video_features_path, f'{video_id}_rgb.npy'))
-            stack_flow = np.load(os.path.join(cfg.video_features_path, f'{video_id}_flow.npy'))
+            stack_rgb = np.load(os.path.join(cfg.video_features_path, f'{video_id}_rgb.npy'))   # (T_V,1024)  
+            stack_flow = np.load(os.path.join(cfg.video_features_path, f'{video_id}_flow.npy')) # (T_V,1024)
             stack_rgb = torch.from_numpy(stack_rgb).float()
             stack_flow = torch.from_numpy(stack_flow).float()
 
             assert stack_rgb.shape == stack_flow.shape
             if get_full_feat:
-                stacks['orig_feat_length']['rgb'] = stack_rgb.shape[0]
-                stacks['orig_feat_length']['flow'] = stack_flow.shape[0]
-                stack_rgb = pad_segment(stack_rgb, cfg.pad_feats_up_to['video'], pad_idx)
-                stack_flow = pad_segment(stack_flow, cfg.pad_feats_up_to['video'], pad_idx=0)
+                stacks['orig_feat_length']['rgb'] = stack_rgb.shape[0]   # T_V         
+                stacks['orig_feat_length']['flow'] = stack_flow.shape[0] # T_V
+                stack_rgb = pad_segment(stack_rgb, cfg.pad_feats_up_to['video'], pad_idx)      # (300,1024)  用1填充
+                stack_flow = pad_segment(stack_flow, cfg.pad_feats_up_to['video'], pad_idx=0)  # (300,1024)  用0填充 ？？
             else:
                 stack_rgb = crop_a_segment(stack_rgb, start, end, duration)
                 stack_flow = crop_a_segment(stack_flow, start, end, duration)
