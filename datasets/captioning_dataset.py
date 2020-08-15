@@ -302,18 +302,18 @@ class ActivityNetCaptionsDataset(Dataset):
             self.meta_path = cfg.val_2_meta_path
             self.batch_size = cfg.inference_batch_size
         elif phase == 'learned_props':
-            self.meta_path = cfg.val_prop_meta_path
-            self.batch_size = cfg.inference_batch_size
+            self.meta_path = cfg.val_prop_meta_path     # json文件转换的csv文件路径
+            self.batch_size = cfg.inference_batch_size  # 2B
         else:
             raise NotImplementedError
 
         # caption dataset *iterator*
         self.train_vocab, self.caption_loader = caption_iterator(cfg, self.batch_size, self.phase)
         
-        self.trg_voc_size = len(self.train_vocab)
-        self.pad_idx = self.train_vocab.stoi[cfg.pad_token]
-        self.start_idx = self.train_vocab.stoi[cfg.start_token]
-        self.end_idx = self.train_vocab.stoi[cfg.end_token]
+        self.trg_voc_size = len(self.train_vocab)  # 训练集单词数
+        self.pad_idx = self.train_vocab.stoi[cfg.pad_token]  # 1
+        self.start_idx = self.train_vocab.stoi[cfg.start_token]  # 2
+        self.end_idx = self.train_vocab.stoi[cfg.end_token]  # 3
             
         if cfg.modality == 'video':
             self.features_dataset = I3DFeaturesDataset(
