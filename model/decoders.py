@@ -62,34 +62,34 @@ class BiModalDecoderLayer(nn.Module):
             x (C, memory): C: (B, Sc, Dc) 
                            memory: (Av: (B, Sa, Da), Va: (B, Sv, Dv))
         '''
-        C, memory = x
-        Av, Va = memory
+        C, memory = x     # C:(B,Seq_Len,300) 
+        Av, Va = memory   # Av: (B,T_A,128)  Va: (B,T_V,1024)
 
         # Define sublayers
         # a comment regarding the motivation of the lambda function please see the EncoderLayer
-        def sublayer_self_att(C): return self.self_att(C, C, C, masks['C_mask'])
-        def sublayer_enc_att_A(C): return self.enc_att_A(C, Av, Av, masks['A_mask'])
-        def sublayer_enc_att_V(C): return self.enc_att_V(C, Va, Va, masks['V_mask'])
+        def sublayer_self_att(C): return self.self_att(C, C, C, masks['C_mask'])      # Caption自注意力机制
+        def sublayer_enc_att_A(C): return self.enc_att_A(C, Av, Av, masks['A_mask'])  # Caption与Audio注意力机制
+        def sublayer_enc_att_V(C): return self.enc_att_V(C, Va, Va, masks['V_mask'])  # Caption与Video注意力机制
         sublayer_feed_forward = self.feed_forward
 
         # 1. Self Attention
         # (B, Sc, Dc)
-        C = self.res_layer_self_att(C, sublayer_self_att)
+        C = self.res_layer_self_att(C, sublayer_self_att)    # (B,Seq_Len,300) 
 
         # 2. Encoder-Decoder Attention
         # (B, Sc, Dc) each
-        Ca = self.res_layer_enc_att_A(C, sublayer_enc_att_A)
-        Cv = self.res_layer_enc_att_V(C, sublayer_enc_att_V)
+        Ca = self.res_layer_enc_att_A(C, sublayer_enc_att_A) # (B,Seq_Len,300)  
+        Cv = self.res_layer_enc_att_V(C, sublayer_enc_att_V) # (B,Seq_Len,300) 
         # (B, Sc, 2*Dc)
-        C = torch.cat([Ca, Cv], dim=-1)
+        C = torch.cat([Ca, Cv], dim=-1)   # (B,Seq_Len,600) 
         # bridge: (B, Sc, Dc) <- (B, Sc, 2*Dc)
-        C = self.bridge(C)
+        C = self.bridge(C)   # (B,Seq_Len,600)-->(B,Seq_Len,300)
 
         # 3. Feed-Forward
         # (B, Sc, Dc) <- (B, Sc, Dc)
-        C = self.res_layer_ff(C, sublayer_feed_forward)
+        C = self.res_layer_ff(C, sublayer_feed_forward)   # (B,Seq_Len,300)-->(B,Seq_Len,1200)-->(B,Seq_Len,300)
 
-        return C, memory
+        return C, memory   # C:(B,Seq_Len,300), Av: (B,T_A,128),  Va: (B,T_V,1024)  
 
 
 class Decoder(nn.Module):
@@ -130,7 +130,8 @@ class BiModelDecoder(nn.Module):
             x (C, memory): C: (B, Sc, Dc)
                 memory: (Av: (B, Sa, Da), Va: (B, Sv, Dv))
         '''
-        # x is (C, memory)
+        # x : C:(B,Seq_Len,300)  Av: (B,T_A,128)  Va: (B,T_V,1024)
+        # maks: v_mask: (B,1,T_V)  c_mask: (B,Seq_Len,Seq_Len)  a_mask: (B,1,T_A)
         C, memory = self.decoder(x, masks)
 
-        return C
+        return C  # (B,Seq_Len,300)
