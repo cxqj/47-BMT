@@ -227,8 +227,8 @@ class AnetPredictions(object):
         self.epoch = epoch
         self.cfg = cfg
         self.segments_used = 0
-        self.segments_total = 0
-        self.num_vid_w_no_props = 0
+        self.segments_total = 0  
+        self.num_vid_w_no_props = 0  # 统计无效的预测视频个数
 
    """
     batch = {
@@ -238,28 +238,30 @@ class AnetPredictions(object):
             'duration_in_secs': duration_in_secs,  
         }
     """
+    # 处理提议生成结果
     def add_new_predictions(self, model_output, batch):  # (B,768000,3)
         '''
         model_output (B, AS, num_features)
         updates anet_prediction dict with the predictions from model_output
         '''
-        model_output = postprocess_preds(model_output, self.cfg, batch)
+        model_output = postprocess_preds(model_output, self.cfg, batch)  # (B,768000,3) --> (B,K,3)
 
         B, k, D = model_output.shape
         num_of_props_written = 0
 
-        shortest_segment_prior = 0.2  # (sec)
+        shortest_segment_prior = 0.2  # (sec)  允许的最小动作时长
         for b, video_preds in enumerate(model_output):
             vid_id = batch['video_ids'][b]
             vid_id_preds = []
 
+            # NMS
             if self.cfg.nms_tiou_thresh is not None:
                 # (nms_N, num_features)<- (AS, num_features)
                 video_preds = non_max_suppresion(video_preds, self.cfg.nms_tiou_thresh)
 
             for pred_start, pred_end, pred_conf in video_preds.tolist():
                 segment = {}
-                start, end = round(pred_start, 5), round(pred_end, 5)
+                start, end = round(pred_start, 5), round(pred_end, 5)   # 保留小数点后5位
                 if end - start > shortest_segment_prior:
                     segment['sentence'] = ''
                     segment['proposal_score'] = round(pred_conf, 5),
@@ -280,6 +282,7 @@ class AnetPredictions(object):
         num_of_props_written_per_video = num_of_props_written / B
         return num_of_props_written_per_video
 
+    # 保存提议生成结果
     def write_anet_predictions_to_json(self):
         # save only val_1 because the props are the same. 1 not the 2 one because 1st has +30 vids
         if self.phase == 'val_1':
@@ -295,6 +298,7 @@ class AnetPredictions(object):
         else:
             raise NotImplementedError
 
+    # 评价提议生成结果
     def evaluate_predictions(self):
         print(f'{self.cfg.max_prop_per_vid*self.segments_used/self.segments_total:.2f} props/vid')
         # during first epochs we have empty preds because we apply postprocess_preds() on preds
@@ -304,7 +308,7 @@ class AnetPredictions(object):
         with HiddenPrints():
             metrics = calculate_metrics(
                 self.cfg.reference_paths, self.submission_path, self.cfg.tIoUs,
-                self.cfg.max_prop_per_vid, verbose=True, only_proposals=True
+                self.cfg.max_prop_per_vid, verbose=True, only_proposals=True  # 注意在评价提议生成效果的时候需要将only_proposals置为True
             )
         return metrics
             
