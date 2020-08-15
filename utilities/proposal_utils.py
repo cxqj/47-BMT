@@ -132,32 +132,32 @@ def get_lr(optimizer):
     for param_group in optimizer.param_groups:
         return param_group['lr']
 
-
+# 生成提议后每个视频选取top@K
 def select_topk_predictions(model_output, k):
     '''model_output (B, S*A, num_feats)'''
     B, S, num_feats = model_output.shape
     # sort model_output on confidence score (2nd col) within each batch
     # (B, S) <-
-    indices = model_output[:, :, 2].argsort(descending=True)
+    indices = model_output[:, :, 2].argsort(descending=True)  # (B,768000)
     # (B, S, 1) <- .view()
     # (B, S, num_feats) <- .repeat()
-    indices = indices.view(B, S, 1).repeat(1, 1, num_feats)
-    model_output = model_output.gather(1, indices)
+    indices = indices.view(B, S, 1).repeat(1, 1, num_feats)   # (B,768000)-->(B,768000,1)-->(B,768000,3)
+    model_output = model_output.gather(1, indices)   # (B,768000,3)
     # select top k
     # (B, k, num_feats) <-
-    model_output = model_output[:, :k, :]
+    model_output = model_output[:, :k, :]   # (B,100,3) 
     return model_output
 
-
-def trim_proposals(model_output, duration_in_secs):
+# 将提议生成结果限定在视频最大时长范围内
+def trim_proposals(model_output, duration_in_secs):  # (B,K,3), (B)
     '''Changes in-place model_output (B, AS, num_feats), starts & ends are in seconds'''
     # for broadcasting it for batches
-    duration_in_secs = torch.tensor(duration_in_secs, device=model_output.device).view(-1, 1)
+    duration_in_secs = torch.tensor(duration_in_secs, device=model_output.device).view(-1, 1)  # (B,1)
     min_start = torch.tensor([0.0], device=model_output.device)
     # clip start for negative values and if start is longer than the duration
-    model_output[:, :, 0] = model_output[:, :, 0].max(min_start).min(duration_in_secs)
+    model_output[:, :, 0] = model_output[:, :, 0].max(min_start).min(duration_in_secs)   # 0 < model_output[:, :, 0] < duration_in_secs
     # clip end
-    model_output[:, :, 1] = model_output[:, :, 1].min(duration_in_secs)
+    model_output[:, :, 1] = model_output[:, :, 1].min(duration_in_secs)    # 0 < model_output[:, :, 1] < duration_in_secs
     return model_output
 
 def remove_very_short_segments(model_output, shortest_segment_prior):
@@ -202,14 +202,14 @@ def postprocess_preds(model_output, cfg, batch):
     '''
     # select top-[max_prop_per_vid] predictions
     # (B, k, num_feats) <- (B, k, num_feats)
-    model_output = select_topk_predictions(model_output, k=cfg.max_prop_per_vid)
+    model_output = select_topk_predictions(model_output, k=cfg.max_prop_per_vid)  # 每个视频选取前100个提议
     # (B, k, num_feats) <- (B, k, num_feats)
-    model_output = get_corner_coords(model_output)
+    model_output = get_corner_coords(model_output)  # (中心，宽度，置信度)-->(开始，结束，置信度)
     # clip start & end to duration
     # (B, k, num_feats) <- (B, k, num_feats)
-    model_output = trim_proposals(model_output, batch['duration_in_secs'])
+    model_output = trim_proposals(model_output, batch['duration_in_secs'])   # 限定结果范围
     # (B, k, num_feats) <-
-    return model_output
+    return model_output   
 
 
 class AnetPredictions(object):
@@ -230,7 +230,15 @@ class AnetPredictions(object):
         self.segments_total = 0
         self.num_vid_w_no_props = 0
 
-    def add_new_predictions(self, model_output, batch):
+   """
+    batch = {
+            'feature_stacks': feature_stacks,  #  {'rgb':(B,300,1024), 'flow':(B,300,1024), 'audio':(B,800,128)}
+            'targets': targets,      # [(事件数，4),(事件数，4),.....(事件数，4)]
+            'video_ids': video_ids,  # [id1,id2,...idB]
+            'duration_in_secs': duration_in_secs,  
+        }
+    """
+    def add_new_predictions(self, model_output, batch):  # (B,768000,3)
         '''
         model_output (B, AS, num_features)
         updates anet_prediction dict with the predictions from model_output
