@@ -199,3 +199,4 @@ class BiModalTransformer(nn.Module):
         C = self.generator(C)  # (B,Seq_Len,300)-->(B,Seq_Len,Vocab_Size)
 
         return C
+      
