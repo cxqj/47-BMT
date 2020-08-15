@@ -46,7 +46,7 @@ class MultiheadedAttention(nn.Module):
         self.linear_Q2d = nn.Linear(self.d_model_Q, self.d_model)
         self.linear_K2d = nn.Linear(self.d_model_K, self.d_model)
         self.linear_V2d = nn.Linear(self.d_model_V, self.d_model)
-        self.linear_d2Q = nn.Linear(self.d_model, self.d_model_Q)
+        self.linear_d2Q = nn.Linear(self.d_model, self.d_model_Q)  # 将最后输出编码到原始维度
 
         self.dropout = nn.Dropout(self.dout_p)
 
