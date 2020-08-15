@@ -13,7 +13,7 @@ from utilities.captioning_utils import HiddenPrints, get_lr
 # 计算性能(caption和proposal都是用这一个)
 def calculate_metrics(
     reference_paths, submission_path, tIoUs, max_prop_per_vid, verbose=True, only_proposals=False
-):
+):  
     metrics = {}
     PREDICTION_FIELDS = ['results', 'version', 'external_data']
     evaluator = ANETcaptions(
@@ -21,15 +21,15 @@ def calculate_metrics(
         max_prop_per_vid, PREDICTION_FIELDS, verbose, only_proposals)
     evaluator.evaluate()
     
+    # 计算Caption时只取tIOU = 0.5, 每个IOU下每种指标的得分
     for i, tiou in enumerate(tIoUs):
         metrics[tiou] = {}
 
-        for metric in evaluator.scores:
+        for metric in evaluator.scores:  
             score = evaluator.scores[metric][i]
             metrics[tiou][metric] = score
 
-    # Print the averages
-    
+    # Print the averages, 每种指标的所有IOU的平均得分
     metrics['Average across tIoUs'] = {}
     for metric in evaluator.scores:
         score = evaluator.scores[metric]
@@ -37,10 +37,18 @@ def calculate_metrics(
     
     return metrics
 
-# 生成Caption
+# 生成Caption，使用的是贪心策略
 def greedy_decoder(model, feature_stacks, max_len, start_idx, end_idx, pad_idx, modality):
     assert model.training is False, 'call model.eval first'
-
+    """
+    feature_stacks: rgb:(B,T_V,1024) flow:(B,T_V,1024)  audio:(B,T_A,128) 
+    max_len: 30
+    start_idx: 2
+    end_idx: 3
+    pad_idx: 1
+    modality: audio_video
+    """
+    
     with torch.no_grad():
         
         if 'audio' in modality:
@@ -54,17 +62,17 @@ def greedy_decoder(model, feature_stacks, max_len, start_idx, end_idx, pad_idx, 
 
         # a mask containing 1s if the ending tok occured, 0s otherwise
         # we are going to stop if ending token occured in every sequence
-        completeness_mask = torch.zeros(B, 1).byte().to(device)
-        trg = (torch.ones(B, 1) * start_idx).long().to(device)
+        completeness_mask = torch.zeros(B, 1).byte().to(device)  # (B,1) 指示每个batch是否都完成了生成单词
+        trg = (torch.ones(B, 1) * start_idx).long().to(device)   # 初始单词  (B,1)
 
         while (trg.size(-1) <= max_len) and (not completeness_mask.all()):
-            masks = make_masks(feature_stacks, trg, modality, pad_idx)
-            preds = model(feature_stacks, trg, masks)
+            masks = make_masks(feature_stacks, trg, modality, pad_idx)  # {'V_Mask':(B,1,T_V),'C_Mask':(B,Seq_Len,Seq_Len),'A_Mask':(B,1,T_A)}
+            preds = model(feature_stacks, trg, masks)  # (B,1,Vocab_Size)
             next_word = preds[:, -1].max(dim=-1)[1].unsqueeze(1)
             trg = torch.cat([trg, next_word], dim=-1)
             completeness_mask = completeness_mask | torch.eq(next_word, end_idx).byte()
 
-        return trg
+        return trg  # (B,Max_Len)
 
     
 def save_model(cfg, epoch, model, optimizer, val_1_loss_value, val_2_loss_value, 
@@ -135,7 +143,7 @@ def make_masks(feature_stacks, captions, modality, pad_idx):
     """
     return masks
 
-
+# 训练caption模型
 def training_loop(cfg, model, loader, criterion, optimizer, epoch, TBoard):
     model.train()
     train_total_loss = 0
@@ -153,12 +161,12 @@ def training_loop(cfg, model, loader, criterion, optimizer, epoch, TBoard):
                  'C_mask':(B,Seq_Len,Seq_Len)}
         """
         masks = make_masks(batch['feature_stacks'], caption_idx, cfg.modality, loader.dataset.pad_idx)
-        pred = model(batch['feature_stacks'], caption_idx, masks)
-        n_tokens = (caption_idx_y != loader.dataset.pad_idx).sum()
-        loss = criterion(pred, caption_idx_y) / n_tokens
+        pred = model(batch['feature_stacks'], caption_idx, masks)  # (B,Seq_Len,Vocab_size)
+        n_tokens = (caption_idx_y != loader.dataset.pad_idx).sum() # pad_idx=1  统计有效单词个数
+        loss = criterion(pred, caption_idx_y) / n_tokens   # 计算caption Loss
         loss.backward()
 
-        if cfg.grad_clip is not None:
+        if cfg.grad_clip is not None:  # 不使用梯度裁剪
             torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip)
 
         optimizer.step()
@@ -171,7 +179,7 @@ def training_loop(cfg, model, loader, criterion, optimizer, epoch, TBoard):
         TBoard.add_scalar('debug/train_loss_epoch', train_total_loss_norm, epoch)
         TBoard.add_scalar('debug/lr', get_lr(optimizer), epoch)
             
-
+# 和训练过程一致
 def validation_next_word_loop(cfg, model, loader, decoder, criterion, epoch, TBoard, exp_name):
     model.eval()
     val_total_loss = 0
@@ -206,20 +214,21 @@ def validation_1by1_loop(cfg, model, loader, decoder, epoch, TBoard):
         },
         'results': {}
     }
+    
     model.eval()
     loader.dataset.update_iterator()
     
-    start_idx = loader.dataset.start_idx
-    end_idx = loader.dataset.end_idx
-    pad_idx = loader.dataset.pad_idx
-    phase = loader.dataset.phase
+    start_idx = loader.dataset.start_idx  # 2
+    end_idx = loader.dataset.end_idx   # 3
+    pad_idx = loader.dataset.pad_idx   # 1
+    phase = loader.dataset.phase   # val_1 / val_2
     # feature_names = loader.dataset.feature_names
     
     if phase == 'val_1':
-        reference_paths = [cfg.reference_paths[0]]
+        reference_paths = [cfg.reference_paths[0]]   # './data/val_1_no_missings.json'
         tIoUs = [0.5]  # no need to wait: they all the same as they are predicted for gt segments
     elif phase == 'val_2':
-        reference_paths = [cfg.reference_paths[1]]
+        reference_paths = [cfg.reference_paths[1]]   # './data/val_2_no_missings.json'
         tIoUs = [0.5]  # no need to wait: they all the same as they are predicted for gt segments
     elif phase == 'learned_props':
         reference_paths = cfg.reference_paths  # here we use all of them
@@ -234,13 +243,13 @@ def validation_1by1_loop(cfg, model, loader, decoder, epoch, TBoard):
         ### PREDICT TOKENS ONE-BY-ONE AND TRANSFORM THEM INTO STRINGS TO FORM A SENTENCE
         ints_stack = decoder(
             model, batch['feature_stacks'], cfg.max_len, start_idx, end_idx, pad_idx, cfg.modality
-        )
+        )  # (B,Max_Seq_Len)
         ints_stack = ints_stack.cpu().numpy()  # what happens here if I use only cpu?
-        # transform integers into strings
-        list_of_lists_with_strings = [[loader.dataset.train_vocab.itos[i] for i in ints] for ints in ints_stack]
+        # transform integers into strings  
+        list_of_lists_with_strings = [[loader.dataset.train_vocab.itos[i] for i in ints] for ints in ints_stack]  # 将结果由索引转换为单词
         ### FILTER PREDICTED TOKENS
         # initialize the list to fill it using indices instead of appending them
-        list_of_lists_with_filtered_sentences = [None] * len(list_of_lists_with_strings)
+        list_of_lists_with_filtered_sentences = [None] * len(list_of_lists_with_strings)  # (B)
 
         for b, strings in enumerate(list_of_lists_with_strings):
             # remove starting token
@@ -280,8 +289,8 @@ def validation_1by1_loop(cfg, model, loader, decoder, epoch, TBoard):
         return None
     else:
         ## SAVING THE RESULTS IN A JSON FILE
-        save_filename = f'captioning_results_{phase}_e{epoch}.json'
-        submission_path = os.path.join(cfg.log_path, save_filename)
+        save_filename = f'captioning_results_{phase}_e{epoch}.json'  
+        submission_path = os.path.join(cfg.log_path, save_filename)   # log_path: 
 
         # in case TBoard is not defined make logdir
         os.makedirs(cfg.log_path, exist_ok=True)
@@ -297,7 +306,7 @@ def validation_1by1_loop(cfg, model, loader, decoder, epoch, TBoard):
         ## RUN THE EVALUATION
         # blocks the printing
         with HiddenPrints():
-            val_metrics = calculate_metrics(reference_paths, submission_path, tIoUs, cfg.max_prop_per_vid)
+            val_metrics = calculate_metrics(reference_paths, submission_path, tIoUs, cfg.max_prop_per_vid)   # 计算caption指标
 
         if phase == 'learned_props':
             print(submission_path)
