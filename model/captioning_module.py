@@ -12,7 +12,7 @@ from model.encoders import BiModalEncoder, Encoder
 from model.generators import Generator
 
 
-
+# 这个是单模态的Transformer
 class Transformer(nn.Module):
     
     def __init__(self, train_dataset, cfg):
@@ -97,7 +97,7 @@ class Transformer(nn.Module):
         
         return out
     
-
+# 双模态transformer
 class BiModalTransformer(nn.Module):
     '''
     Forward:
@@ -117,32 +117,39 @@ class BiModalTransformer(nn.Module):
         else:
             self.emb_A = Identity()
             self.emb_V = Identity()
-
+        # 词嵌入
         self.emb_C = VocabularyEmbedder(train_dataset.trg_voc_size, cfg.d_model_caps)
         
+        # 添加位置信息
         self.pos_enc_A = PositionalEncoder(cfg.d_model_audio, cfg.dout_p)
         self.pos_enc_V = PositionalEncoder(cfg.d_model_video, cfg.dout_p)
         self.pos_enc_C = PositionalEncoder(cfg.d_model_caps, cfg.dout_p)
 
+        # 编码层
         self.encoder = BiModalEncoder(
             cfg.d_model_audio, cfg.d_model_video, cfg.d_model, cfg.dout_p, cfg.H, 
             cfg.d_ff_audio, cfg.d_ff_video, cfg.N
         )
         
+        # 解码层
         self.decoder = BiModelDecoder(
             cfg.d_model_audio, cfg.d_model_video, cfg.d_model_caps, cfg.d_model, cfg.dout_p, 
             cfg.H, cfg.d_ff_caps, cfg.N
         )
 
+        # Caption生成
         self.generator = Generator(cfg.d_model_caps, train_dataset.trg_voc_size)
 
+        # 初始化模型参数
         print('initialization: xavier')
         for p in self.parameters():
             if p.dim() > 1:
                 nn.init.xavier_uniform_(p)
+        
+        # 初始化词嵌入
         # initialize embedding after, so it will replace the weights
         # of the prev. initialization
-        self.emb_C.init_word_embeddings(train_dataset.train_vocab.vectors, cfg.unfreeze_word_emb)
+        self.emb_C.init_word_embeddings(train_dataset.train_vocab.vectors, cfg.unfreeze_word_emb)   # (单词数x300)，False(不需要训练词嵌入模型)
 
         # load the pretrained encoder from the proposal (used in ablation studies)
         if cfg.pretrained_prop_model_path is not None:
