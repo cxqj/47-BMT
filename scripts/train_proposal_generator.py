@@ -25,11 +25,12 @@ def train_prop(cfg):
     # exp_name = cfg.make_experiment_name()
     exp_name = cfg.curr_time[2:]
 
+    # 使用K-means算法生成预设anchor
     anchors = {}
     if 'audio' in cfg.modality:
-        anchors['audio'] = calc_anchors_using_kmeans(cfg.train_json_path, cfg.anchors_num_audio)
+        anchors['audio'] = calc_anchors_using_kmeans(cfg.train_json_path, cfg.anchors_num_audio)   # './data/train.json'   48
     if 'video' in cfg.modality:
-        anchors['video'] = calc_anchors_using_kmeans(cfg.train_json_path, cfg.anchors_num_video)
+        anchors['video'] = calc_anchors_using_kmeans(cfg.train_json_path, cfg.anchors_num_video)   # './data/train.json'   128
 
     # ActivityNetCaptionsDataset() is used only for pad_idx
     train_dataset = ActivityNetCaptionsDataset(cfg, 'train', get_full_feat=True)
@@ -45,7 +46,7 @@ def train_prop(cfg):
     valid_loader = DataLoader(valid_dataset, shuffle=False,
                               batch_size=cfg.inference_batch_size,
                               collate_fn=valid_dataset.collate4proposal_generation)
-    
+    # 构建双模态提议生成模型
     if cfg.modality == 'audio_video':
         model = MultimodalProposalGenerator(cfg, anchors)
     else:
