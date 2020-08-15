@@ -14,23 +14,23 @@ from utilities.proposal_utils import (filter_meta_for_video_id,
 
 
 class ProposalGenerationDataset(Dataset):
-
+    # phase: train / val_1  
     def __init__(self, cfg, phase, pad_idx=1):
         '''we hardcode pad_idx to be 1'''
         self.cfg = cfg
-        self.modality = cfg.modality
+        self.modality = cfg.modality  # audio_video
         self.phase = phase
         if self.phase == 'train':
-            self.meta_path = cfg.train_meta_path
+            self.meta_path = cfg.train_meta_path  # './data/train.csv'
         elif self.phase == 'val_1':
-            self.meta_path = cfg.val_1_meta_path
+            self.meta_path = cfg.val_1_meta_path 
         elif self.phase == 'val_2':
             self.meta_path = cfg.val_2_meta_path
         else:
             raise NotImplementedError
 
-        self.pad_idx = pad_idx
-        self.feature_names_list = []
+        self.pad_idx = pad_idx   # 1
+        self.feature_names_list = []  # ['i3d_features','vggish_features']
         if 'video' in self.modality:
             self.video_feature_name = f'{cfg.video_feature_name}_features'
             self.feature_names_list.append(self.video_feature_name)
@@ -38,19 +38,20 @@ class ProposalGenerationDataset(Dataset):
             self.audio_feature_name = f'{cfg.audio_feature_name}_features'
             self.feature_names_list.append(self.audio_feature_name)
         self.meta_dataset = pd.read_csv(self.meta_path, sep='\t')
-        self.dataset = self.meta_dataset['video_id'].unique().tolist()
+        self.dataset = self.meta_dataset['video_id'].unique().tolist()  # 视频名称列表
         # self.dataset = self.meta_dataset['video_id'].sample(n=4).unique().tolist()
         # print(self.dataset)
 
         # the dataset filtering is done considering videos only
+        # 将不满足条件的视频过滤
         print(f'Dataset size (before filtering, {phase}): {len(self.dataset)}')
-        self.filtered_ids_filepath = f'./tmp/filtered_ids_from_{phase}_for{self.modality}.txt'
-        self.dataset = self.filter_dataset()
+        self.filtered_ids_filepath = f'./tmp/filtered_ids_from_{phase}_for{self.modality}.txt'  # 将不存在的视频ID保存到这个文件中
+        self.dataset = self.filter_dataset()  # 过滤掉那些动作时长<0的视频
 
         if phase in ['train', 'val_1', 'val_2']:
             print(f'Dataset size (after filtering, {phase}): {len(self.dataset)}')
             self.extracted_targets_path = f'./tmp/extracted_targets_for_{phase}.pkl'
-            self.dataset_targets = self.extract_targets()
+            self.dataset_targets = self.extract_targets()  # 生成target信息
 
 
     def __getitem__(self, idx):
@@ -149,23 +150,24 @@ class ProposalGenerationDataset(Dataset):
             dataset_targets = {}
 
             for video_id in tqdm(self.dataset, desc='Preparing targets'):
-                video_id_meta = filter_meta_for_video_id(self.meta_dataset, video_id)
+                video_id_meta = filter_meta_for_video_id(self.meta_dataset, video_id)  # 获取属于该视频的Meta信息
                 event_num = len(video_id_meta)
-                start_end_numpy = video_id_meta[['start', 'end']].to_numpy()
-                center_coords = get_center_coords(start_end_numpy)
-                segment_lengths = get_segment_lengths(start_end_numpy)
-                duration = float(video_id_meta['duration'].unique())
+                start_end_numpy = video_id_meta[['start', 'end']].to_numpy()  # (N,2)
+                center_coords = get_center_coords(start_end_numpy)      # (N,)  事件中心
+                segment_lengths = get_segment_lengths(start_end_numpy)  # (N,)  事件时长
+                duration = float(video_id_meta['duration'].unique())  # 视频时长
 
-                meta_indices = video_id_meta['idx'].to_numpy()
+                meta_indices = video_id_meta['idx'].to_numpy()  # 事件在meta_data中的索引
 
+                # 水平堆叠信息
                 targets = np.column_stack([
                     np.zeros((event_num, 1)),
                     center_coords,
                     segment_lengths,
                     meta_indices,
-                ])
+                ])   # (N,4), 4分别用于视频名，事件中心，事件时长，事件索引
 
-                phase = video_id_meta['phase'].unique()[0]
+                phase = video_id_meta['phase'].unique()[0]  # train / val_1
 
                 dataset_targets[video_id] = {
                     'targets': torch.from_numpy(targets).float(),
