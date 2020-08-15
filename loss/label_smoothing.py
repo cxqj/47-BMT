@@ -6,8 +6,8 @@ class LabelSmoothing(nn.Module):
     
     def __init__(self, smoothing, pad_idx):
         super(LabelSmoothing, self).__init__()
-        self.smoothing = smoothing
-        self.pad_idx = pad_idx
+        self.smoothing = smoothing  # 0.7
+        self.pad_idx = pad_idx  # 1
         
     def forward(self, pred, target):  # pred (B, S, V), target (B, S)
         # Note: preds are expected to be after log
