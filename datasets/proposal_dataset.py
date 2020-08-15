@@ -55,18 +55,33 @@ class ProposalGenerationDataset(Dataset):
 
 
     def __getitem__(self, idx):
-        video_id = self.dataset[idx]
+        video_id = self.dataset[idx]  
         feature_stacks = self.get_feature_stacks(video_id)
         targets_dict = None
         # targets_dict['targets'] will be changed in collate4...(), hence, deepcopy is used
         targets_dict = copy.deepcopy(self.dataset_targets[video_id])
-
+        """
+        targets_dict:
+            { 'targets': (事件数，4)--(batch_id,事件中心，事件时长，在meta_data中的索引)
+              'phase': 'train'/'val_1'
+              'duration': 视频时长
+              'video_id': 视频名称 
+            }
+        """
         return feature_stacks, targets_dict
 
     def __len__(self):
         return len(self.dataset)
 
     def get_feature_stacks(self, video_id):
+        """
+        feature_stacks:
+            {orig_feat_length: {'audio':音频特征长度，'rgb':rgb特征长度, 'flow':flow特征长度}
+             'audio':(800,128)
+             'rgb':(300,1024)
+             'flow':(300,1024)  
+            }  
+        """
         feature_stacks = load_features_from_npy(
             self.cfg, self.feature_names_list, video_id,
             start=None, end=None, duration=None, pad_idx=self.pad_idx, get_full_feat=True
@@ -74,20 +89,26 @@ class ProposalGenerationDataset(Dataset):
         return feature_stacks
 
     def collate4proposal_generation(self, batch):
-
+        """
+        batch: [[feat_stacks,targets_dict],[feat_stacks,targets_dict],...]
+        """
+        """
+        feature_stacks = {'rgb':(B,300,1024), 'flow':(B,300,1024), 'audio':(B,800,128)}
+        """
         feature_stacks = {}
         if 'video' in self.modality:
-            rgb = [features['rgb'].unsqueeze(0) for features, _ in batch]
-            flow = [features['flow'].unsqueeze(0) for features, _ in batch]
-            feature_stacks['rgb'] = torch.cat(rgb, dim=0).to(self.cfg.device)
-            feature_stacks['flow'] = torch.cat(flow, dim=0).to(self.cfg.device)
+            rgb = [features['rgb'].unsqueeze(0) for features, _ in batch]    # [(1,300,1024),(1,300,1024),...(1,300,1024)]
+            flow = [features['flow'].unsqueeze(0) for features, _ in batch]  # [(1,300,1024),(1,300,1024),...(1,300,1024)]
+            feature_stacks['rgb'] = torch.cat(rgb, dim=0).to(self.cfg.device)      # (B,300,1024)
+            feature_stacks['flow'] = torch.cat(flow, dim=0).to(self.cfg.device)    # (B,300,1024)
         if 'audio' in self.modality:
             audio = [features['audio'].unsqueeze(0) for features, _ in batch]
-            feature_stacks['audio'] = torch.cat(audio, dim=0).to(self.cfg.device)
+            feature_stacks['audio'] = torch.cat(audio, dim=0).to(self.cfg.device)  # (B,800,128) 
 
+        
         if self.phase in ['train', 'val_1', 'val_2']:
             for video_idx, (features, targets_dict) in enumerate(batch):
-                targets_dict['targets'][:, 0] = video_idx
+                targets_dict['targets'][:, 0] = video_idx   # 为target_dict添加batch索引
 
             video_ids = [targets_dict['video_id'] for _, targets_dict in batch]
             duration_in_secs = [targets_dict['duration'] for _, targets_dict in batch]
@@ -95,10 +116,10 @@ class ProposalGenerationDataset(Dataset):
             targets = torch.cat(targets, dim=0).to(self.cfg.device)
 
         batch = {
-            'feature_stacks': feature_stacks,
-            'targets': targets,
-            'video_ids': video_ids,
-            'duration_in_secs': duration_in_secs,
+            'feature_stacks': feature_stacks,  #  {'rgb':(B,300,1024), 'flow':(B,300,1024), 'audio':(B,800,128)}
+            'targets': targets,      # [(事件数，4),(事件数，4),.....(事件数，4)]
+            'video_ids': video_ids,  # [id1,id2,...idB]
+            'duration_in_secs': duration_in_secs,  
         }
 
         return batch
