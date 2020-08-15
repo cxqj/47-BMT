@@ -27,16 +27,24 @@ def save_model(cfg, epoch, model, optimizer, scheduler, anet_metrics, best_metri
 def train_av_loop(cfg, model, optimizer, loader, epoch, TBoard):
     model.train()
     train_total_loss = 0
-    loss_acc_A = {}
+    loss_acc_A = {}  # 累加各个batch的loss
     loss_acc_V = {}
     phase = 'train'
     progress_bar_name = f'{cfg.curr_time[2:]}: {phase} {epoch} @ {cfg.device}'
 
+    """
+    batch = {
+            'feature_stacks': feature_stacks,  #  {'rgb':(B,300,1024), 'flow':(B,300,1024), 'audio':(B,800,128)}
+            'targets': targets,      # [(事件数，4),(事件数，4),.....(事件数，4)]
+            'video_ids': video_ids,  # [id1,id2,...idB]
+            'duration_in_secs': duration_in_secs,  
+        }
+    """
     for i, batch in enumerate(tqdm(loader, desc=progress_bar_name)):
         optimizer.zero_grad()
         B = len(batch['video_ids'])
-        masks = make_masks(batch['feature_stacks'], None, cfg.modality, loader.dataset.pad_idx)
-        predictions, loss, losses_A, losses_V = model(batch['feature_stacks'], batch['targets'], masks)
+        masks = make_masks(batch['feature_stacks'], None, cfg.modality, loader.dataset.pad_idx)  # {'V_Mask':(B,1,300),'A_Mask':(B,1,800)}
+        predictions, loss, losses_A, losses_V = model(batch['feature_stacks'], batch['targets'], masks)  # predictions:(B,768000,3) losses_A: {'loss_x','loss_w','loss_conf_obj','loss_conf_noobj'} 
         loss_acc_A = add_dict_to_another_dict(losses_A, loss_acc_A)
         loss_acc_V = add_dict_to_another_dict(losses_V, loss_acc_V)
 
@@ -48,6 +56,7 @@ def train_av_loop(cfg, model, optimizer, loader, epoch, TBoard):
         optimizer.step()
         train_total_loss += loss.item()
 
+    # Loss均值
     train_total_loss /= len(loader)
     loss_acc_A = {k: v / len(loader) for k, v in loss_acc_A.items()}
     loss_acc_V = {k: v / len(loader) for k, v in loss_acc_V.items()}
@@ -73,8 +82,8 @@ def train_loop(cfg, model, optimizer, loader, epoch, TBoard):
     for i, batch in enumerate(tqdm(loader, desc=progress_bar_name)):
         optimizer.zero_grad()
         B = len(batch['video_ids'])
-        masks = make_masks(batch['feature_stacks'], None, cfg.modality, loader.dataset.pad_idx)
-        predictions, loss, losses_dict = model(batch['feature_stacks'], batch['targets'], masks)
+        masks = make_masks(batch['feature_stacks'], None, cfg.modality, loader.dataset.pad_idx)  
+        predictions, loss, losses_dict = model(batch['feature_stacks'], batch['targets'], masks) 
         loss_acc = add_dict_to_another_dict(losses_dict, loss_acc)
         
         loss.backward()
@@ -96,23 +105,32 @@ def train_loop(cfg, model, optimizer, loader, epoch, TBoard):
     else:
         print(f'Train Loss @ {epoch} epoch: {train_total_loss}')
 
+# 验证Prop生成
 def validation_loop(cfg, model, optimizer, scheduler, loader, epoch, best_metric, TBoard):
     model.eval()
     phase = loader.dataset.phase
     anet_predictions = AnetPredictions(cfg, phase, epoch)
     progress_bar_name = f'{cfg.curr_time[2:]}: {phase} {epoch} @ {cfg.device}'
 
+    """
+    batch = {
+            'feature_stacks': feature_stacks,  #  {'rgb':(B,300,1024), 'flow':(B,300,1024), 'audio':(B,800,128)}
+            'targets': targets,      # [(事件数，4),(事件数，4),.....(事件数，4)]
+            'video_ids': video_ids,  # [id1,id2,...idB]
+            'duration_in_secs': duration_in_secs,  
+        }
+    """
     for i, batch in enumerate(tqdm(loader, desc=progress_bar_name)):
         masks = make_masks(batch['feature_stacks'], None, cfg.modality, loader.dataset.pad_idx)
 
         with torch.no_grad():
-            predictions, _, _, _ = model(batch['feature_stacks'], batch['targets'], masks)
+            predictions, _, _, _ = model(batch['feature_stacks'], batch['targets'], masks) # (B,768000,3)
             anet_predictions.add_new_predictions(predictions, batch)
 
     # predictions of the prop gen module are the same for val_1 & val_2.
     # Also, we evaluate preformance againts both of them. Hence,
     # There is no need to repeat it for val_2
-    anet_predictions.write_anet_predictions_to_json()
+    anet_predictions.write_anet_predictions_to_json()   # 保存Json文件
     anet_metrics = anet_predictions.evaluate_predictions()
     if TBoard is not None:
         for tIoU in cfg.tIoUs:
@@ -124,7 +142,7 @@ def validation_loop(cfg, model, optimizer, scheduler, loader, epoch, best_metric
             TBoard.add_scalar(f'densevid_eval_k/F1_{tIoU}', f1, epoch)
         avg_precision = anet_metrics['Average across tIoUs']['Precision']
         avg_recall = anet_metrics['Average across tIoUs']['Recall']
-        avg_f1 = calculate_f1(avg_recall, avg_precision)
+        avg_f1 = calculate_f1(avg_recall, avg_precision)  # 计算F-1得分   2*recall*precision / (recall + precision)
         TBoard.add_scalar(f'metrics/avg_precision_at_k', avg_precision, epoch)
         TBoard.add_scalar(f'metrics/avg_recall_at_k', avg_recall, epoch)
         TBoard.add_scalar(f'metrics/avg_F1_at_k', avg_f1, epoch)
