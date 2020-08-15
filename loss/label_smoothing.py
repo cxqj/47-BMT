@@ -19,14 +19,14 @@ class LabelSmoothing(nn.Module):
         # prior (uniform)
         dist = self.smoothing * torch.ones_like(pred) / (V - 2)  # (B * Seq_Len, Vocab_size)
         # add smoothed ground-truth to prior (args: dim, index, src (value))
-        dist.scatter_(1, target.unsqueeze(-1).long(), 1-self.smoothing)
-        # make the padding token to have zero probability
+        dist.scatter_(1, target.unsqueeze(-1).long(), 1-self.smoothing)  # 将dist中target对应的位置置为0.3  
+        # make the padding token to have zero probability 
         dist[:, self.pad_idx] = 0
         # ?? mask: 1 if target == pad_idx; 0 otherwise
-        mask = torch.nonzero(target == self.pad_idx)
+        mask = torch.nonzero(target == self.pad_idx)  # target中pad_idx所在的索引
         
         if mask.sum() > 0 and len(mask) > 0:
             # dim, index, val
-            dist.index_fill_(0, mask.squeeze(), 0)
+            dist.index_fill_(0, mask.squeeze(), 0)   # 根据mask中的值将dist对应行置为0
             
         return F.kl_div(pred, dist, reduction='sum')
