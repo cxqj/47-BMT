@@ -228,11 +228,11 @@ def validation_1by1_loop(cfg, model, loader, decoder, epoch, TBoard):
         reference_paths = [cfg.reference_paths[0]]   # './data/val_1_no_missings.json'
         tIoUs = [0.5]  # no need to wait: they all the same as they are predicted for gt segments
     elif phase == 'val_2':
-        reference_paths = [cfg.reference_paths[1]]   # './data/val_2_no_missings.json'
+        reference_paths = [cfg.reference_paths[1]]   # './data/val_1_no_missings.json'
         tIoUs = [0.5]  # no need to wait: they all the same as they are predicted for gt segments
     elif phase == 'learned_props':
-        reference_paths = cfg.reference_paths  # here we use all of them
-        tIoUs = cfg.tIoUs
+        reference_paths = cfg.reference_paths  # here we use all of them  ['./data/val_1_no_missings.json','./data/val_1_no_missings.json']
+        tIoUs = cfg.tIoUs    # [0,3,0.5,0.7,0.9]
         assert len(tIoUs) == 4
 
     progress_bar_name = f'{cfg.curr_time[2:]}: {phase} 1by1 {epoch} @ {cfg.device}'
