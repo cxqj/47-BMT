@@ -130,6 +130,11 @@ def eval_on_learned_props(args):
         cfg, model, val_pred_prop_loader, greedy_decoder, cap_model_cpt['epoch'], TBoard
     )
 
+    """
+    val_metrics_pred_prop：
+      {0.3：{'Blue_1','Blue_2','Blue_3','Blue_4',}}
+    
+    """
     print(val_metrics_pred_prop)
     
     # If you missed the scores after printing you may find it in the args.pretrained_cap_model_path
