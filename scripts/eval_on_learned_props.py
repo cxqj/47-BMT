@@ -132,7 +132,12 @@ def eval_on_learned_props(args):
 
     """
     val_metrics_pred_prop：
-      {0.3：{'Blue_1','Blue_2','Blue_3','Blue_4',}}
+      {0.3：{'Blue_1','Blue_2','Blue_3','Blue_4','METEOR','Rouge_L','CIDER','Recall','Precision'},
+       0.5：{'Blue_1','Blue_2','Blue_3','Blue_4','METEOR','Rouge_L','CIDER','Recall','Precision'},
+       0.7：{'Blue_1','Blue_2','Blue_3','Blue_4','METEOR','Rouge_L','CIDER','Recall','Precision'},
+       0.9：{'Blue_1','Blue_2','Blue_3','Blue_4','METEOR','Rouge_L','CIDER','Recall','Precision'},
+       Average_across_tIOUS：{'Blue_1','Blue_2','Blue_3','Blue_4','METEOR','Rouge_L','CIDER','Recall','Precision'},
+      }
     
     """
     print(val_metrics_pred_prop)
