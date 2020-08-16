@@ -237,6 +237,19 @@ def validation_1by1_loop(cfg, model, loader, decoder, epoch, TBoard):
 
     progress_bar_name = f'{cfg.curr_time[2:]}: {phase} 1by1 {epoch} @ {cfg.device}'
     
+    """
+    batch_dict = {
+            'video_ids': video_ids,
+            'captions': captions,
+            'starts': starts.to(self.device),
+            'ends': ends.to(self.device),
+            'feature_stacks': {
+                'rgb': vid_stacks_rgb.to(self.device),
+                'flow': vid_stacks_flow.to(self.device),
+                'audio': aud_stacks.to(self.device),
+            }
+        }
+    """
     for i, batch in enumerate(tqdm(loader, desc=progress_bar_name)):
         # caption_idx = batch['caption_data'].caption
         # caption_idx, caption_idx_y = caption_idx[:, :-1], caption_idx[:, 1:]
@@ -249,7 +262,7 @@ def validation_1by1_loop(cfg, model, loader, decoder, epoch, TBoard):
         list_of_lists_with_strings = [[loader.dataset.train_vocab.itos[i] for i in ints] for ints in ints_stack]  # 将结果由索引转换为单词
         ### FILTER PREDICTED TOKENS
         # initialize the list to fill it using indices instead of appending them
-        list_of_lists_with_filtered_sentences = [None] * len(list_of_lists_with_strings)  # (B)
+        list_of_lists_with_filtered_sentences = [None] * len(list_of_lists_with_strings)  # (B)  保存每个batch的结果
 
         for b, strings in enumerate(list_of_lists_with_strings):
             # remove starting token
@@ -287,7 +300,7 @@ def validation_1by1_loop(cfg, model, loader, decoder, epoch, TBoard):
     
     if cfg.log_path is None:
         return None
-    else:
+    else:   # 保存json结果并评价
         ## SAVING THE RESULTS IN A JSON FILE
         save_filename = f'captioning_results_{phase}_e{epoch}.json'  
         submission_path = os.path.join(cfg.log_path, save_filename)   # log_path: 
