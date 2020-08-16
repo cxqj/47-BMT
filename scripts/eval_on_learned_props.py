@@ -87,7 +87,7 @@ class Config(object):
 def eval_on_learned_props(args):
     cap_model_cpt = torch.load(args.pretrained_cap_model_path, map_location='cpu')
     cfg = cap_model_cpt['config']
-    cfg.max_prop_per_vid = args.max_prop_per_vid
+    cfg.max_prop_per_vid = args.max_prop_per_vid  # 100
     cfg.device = args.device_ids[0]
     # in case log_path has moved (remove trailing .best_*_model.pt)
     cfg.log_path = os.path.split(args.pretrained_cap_model_path)[0]
@@ -96,7 +96,7 @@ def eval_on_learned_props(args):
     if 'video' in cfg.modality:
         cfg.video_features_path = args.video_features_path
 
-    check_args(cfg)
+    check_args(cfg)  # 查看特征文件夹是否存在
 
     # returns path where .csv was saved, which is prop_pred_path's folder
     # we change the content of cfg only once---here. The motivation is a more clear code for
