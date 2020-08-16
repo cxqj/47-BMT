@@ -185,21 +185,21 @@ class VGGishFeaturesDataset(Dataset):
 
     def __len__(self):
         return len(self.dataset)
-    
+# 加载音频/视频特征    
 class AudioVideoFeaturesDataset(Dataset):
     
     def __init__(self, video_features_path, video_feature_name, audio_features_path, 
                  audio_feature_name, meta_path, device, pad_idx, get_full_feat, cfg):
         self.cfg = cfg
-        self.video_features_path = video_features_path
-        self.video_feature_name = f'{video_feature_name}_features'
+        self.video_features_path = video_features_path  
+        self.video_feature_name = f'{video_feature_name}_features'   # 'i3d_features'
         self.audio_features_path = audio_features_path
-        self.audio_feature_name = f'{audio_feature_name}_features'
-        self.feature_names_list = [self.video_feature_name, self.audio_feature_name]
+        self.audio_feature_name = f'{audio_feature_name}_features'   # 'vggish_features'
+        self.feature_names_list = [self.video_feature_name, self.audio_feature_name]  # ['i3d_features','vggish_features']
         self.device = device
-        self.dataset = pd.read_csv(meta_path, sep='\t')
-        self.pad_idx = pad_idx
-        self.get_full_feat = get_full_feat
+        self.dataset = pd.read_csv(meta_path, sep='\t')  # csv文件('video_id','caption','start','end','duration','phase','idx')
+        self.pad_idx = pad_idx  # 1
+        self.get_full_feat = get_full_feat   # 对于生成caption为False
         
         if self.video_feature_name == 'i3d_features':
             self.video_feature_size = 1024
@@ -212,7 +212,7 @@ class AudioVideoFeaturesDataset(Dataset):
             raise Exception(f'Inspect: "{self.audio_feature_name}"')
             
     
-    def __getitem__(self, indices):
+    def __getitem__(self, indices):  # indices中保存的是在csv文件中的行号
         video_ids, captions, starts, ends = [], [], [], []
         vid_stacks_rgb, vid_stacks_flow, aud_stacks = [], [], []
         
@@ -220,7 +220,7 @@ class AudioVideoFeaturesDataset(Dataset):
         for idx in indices:
             idx = idx.item()
             video_id, caption, start, end, duration, _, _ = self.dataset.iloc[idx]
-            
+            # stack: {'audio','rgb','flow'}
             stack = load_features_from_npy(
                 self.cfg, self.feature_names_list,
                 video_id, start, end, duration, self.pad_idx, self.get_full_feat
@@ -235,6 +235,7 @@ class AudioVideoFeaturesDataset(Dataset):
             # sometimes vid_stack and aud_stack are empty after the filtering. 
             # we replace it with noise.
             # tied with assertion above
+            # 如果rgb和flow特征为空，则填充特征为(1,D)的0特征
             if (vid_stack_rgb is None) and (vid_stack_flow is None):
                 # print(f'RGB and FLOW are None. Zero (1, D) @: {video_id}')
                 vid_stack_rgb = fill_missing_features('zero', self.video_feature_size)
@@ -251,12 +252,12 @@ class AudioVideoFeaturesDataset(Dataset):
             vid_stacks_rgb.append(vid_stack_rgb)
             vid_stacks_flow.append(vid_stack_flow)
             aud_stacks.append(aud_stack)
-            
+        # pad各个batch的特征到相同的长度    
         # [4] see ActivityNetCaptionsDataset.__getitem__ documentation
         # rgb is padded with pad_idx; flow is padded with 0s: expected to be summed later
-        vid_stacks_rgb = pad_sequence(vid_stacks_rgb, batch_first=True, padding_value=self.pad_idx)
-        vid_stacks_flow = pad_sequence(vid_stacks_flow, batch_first=True, padding_value=0)
-        aud_stacks = pad_sequence(aud_stacks, batch_first=True, padding_value=self.pad_idx)
+        vid_stacks_rgb = pad_sequence(vid_stacks_rgb, batch_first=True, padding_value=self.pad_idx)  # rgb特征pad值为1
+        vid_stacks_flow = pad_sequence(vid_stacks_flow, batch_first=True, padding_value=0)   # flow特征pad值为0
+        aud_stacks = pad_sequence(aud_stacks, batch_first=True, padding_value=self.pad_idx)  # audio特征pad值为0
 
         starts = torch.tensor(starts).unsqueeze(1)
         ends = torch.tensor(ends).unsqueeze(1)
@@ -302,13 +303,13 @@ class ActivityNetCaptionsDataset(Dataset):
             self.meta_path = cfg.val_2_meta_path
             self.batch_size = cfg.inference_batch_size
         elif phase == 'learned_props':
-            self.meta_path = cfg.val_prop_meta_path     # json文件转换的csv文件路径
+            self.meta_path = cfg.val_prop_meta_path     # 提议结果json文件转换的csv文件路径
             self.batch_size = cfg.inference_batch_size  # 2B
         else:
             raise NotImplementedError
 
         # caption dataset *iterator*
-        self.train_vocab, self.caption_loader = caption_iterator(cfg, self.batch_size, self.phase)
+        self.train_vocab, self.caption_loader = caption_iterator(cfg, self.batch_size, self.phase)  # train_vocab始终使用的是train_meta_path的数据
         
         self.trg_voc_size = len(self.train_vocab)  # 训练集单词数
         self.pad_idx = self.train_vocab.stoi[cfg.pad_token]  # 1
