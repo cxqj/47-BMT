@@ -455,3 +455,4 @@ def make_targets(predictions, targets, anchors, stride):   # 获取gt_traget  �
     target_obj = obj_mask.float()
 
     return obj_mask, noobj_mask, target_x, target_w, target_obj
+
