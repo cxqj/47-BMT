@@ -6,7 +6,7 @@ class LabelSmoothing(nn.Module):
     
     def __init__(self, smoothing, pad_idx):
         super(LabelSmoothing, self).__init__()
-        self.smoothing = smoothing  # 0.7
+        self.smoothing = smoothing  # 0.7  smoothing控制的是单词的ground_truth概率
         self.pad_idx = pad_idx  # 1
         
     def forward(self, pred, target):  # pred (B, Seq_Len, Vocab_size), target (B, Seq_Len)
