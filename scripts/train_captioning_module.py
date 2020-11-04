@@ -136,3 +136,4 @@ def train_cap(cfg):
     print(f'best_metric: {best_metric}')
     if cfg.to_log:
         TBoard.close()
+        
