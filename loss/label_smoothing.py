@@ -19,7 +19,7 @@ class LabelSmoothing(nn.Module):
         # prior (uniform)
         dist = self.smoothing * torch.ones_like(pred) / (V - 2)  # (B * Seq_Len, Vocab_size)
         # add smoothed ground-truth to prior (args: dim, index, src (value))
-        dist.scatter_(1, target.unsqueeze(-1).long(), 1-self.smoothing)  # 将dist中target对应的位置置为0.3  
+        dist.scatter_(1, target.unsqueeze(-1).long(), 1-self.smoothing)  # 将dist中target对应的位置置为0.3    PyTorch 中，一般函数加下划线代表直接在原来的 Tensor 上修改
         # make the padding token to have zero probability 
         dist[:, self.pad_idx] = 0
         # ?? mask: 1 if target == pad_idx; 0 otherwise
